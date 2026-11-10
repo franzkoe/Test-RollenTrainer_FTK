@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Rad -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M54,32 A22,22 0 1,1 53.99,32 Z"
+        android:strokeColor="#4FD1C5"
+        android:strokeWidth="5" />
+    <!-- Blitz -->
+    <path
+        android:fillColor="#FFCC00"
+        android:pathData="M58,38 L45,57 L53,57 L50,70 L63,51 L55,51 Z" />
+</vector>
