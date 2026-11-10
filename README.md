@@ -91,3 +91,15 @@ app/src/main/java/de/rollentrainer/app/
 │   └── Store.kt           Speicherung (DataStore)
 └── ui/                    Compose-Oberfläche (Hauptmenü, Geräte, Freie Fahrt, Trainings)
 ```
+
+## Lizenz
+
+Copyright (C) 2026 franzkoe
+
+Dieses Programm ist freie Software und steht unter der **GNU General Public License,
+Version 3 oder (nach deiner Wahl) jeder späteren Version** (GPL-3.0-or-later). Es wird ohne
+jede Gewährleistung bereitgestellt. Der vollständige Lizenztext steht in der Datei
+[`LICENSE`](LICENSE).
+
+Die verwendeten Bibliotheken (AndroidX, Jetpack Compose, Kotlin, kotlinx.coroutines) stehen
+unter der Apache-Lizenz 2.0, die mit der GPL Version 3 vereinbar ist.
