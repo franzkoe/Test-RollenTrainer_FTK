@@ -26,7 +26,7 @@ Das Projekt enthält einen fertigen Build-Ablauf für GitHub (`.github/workflows
 3. Reiter **Actions** öffnen – der Lauf „APK bauen“ startet automatisch (ca. 5 Minuten).
 4. Danach liegt die Datei **`Rollentrainer.apk`** unter **Releases** (rechte Seitenleiste)
    und zusätzlich als Artefakt im Actions-Lauf.
-5. APK am Xiaomi im Browser herunterladen und antippen.
+5. APK am Smartphone im Browser herunterladen und antippen.
 
 Schlägt der Lauf fehl, steht die Fehlermeldung im Schritt „APK bauen“ – einfach kopieren
 und zur Korrektur weitergeben.
@@ -40,10 +40,10 @@ und zur Korrektur weitergeben.
 4. Entweder Handy per USB anschließen (Entwickleroptionen → **USB-Debugging** und bei Xiaomi
    zusätzlich **„Über USB installieren“**) und **Run** drücken – oder die APK aufs Handy kopieren.
 
-## APK auf dem Xiaomi installieren
+## APK auf dem Smartphone installieren
 
 - APK antippen → „Unbekannte Apps installieren“ für den Browser/Dateimanager erlauben.
-- HyperOS zeigt ggf. eine Sicherheitswarnung mit Wartezeit – bestätigen.
+- OS zeigt ggf. eine Sicherheitswarnung mit Wartezeit – bestätigen.
 - Alle Builds sind mit demselben Schlüssel signiert (`app/rollentrainer.jks`), Updates lassen
   sich also einfach über die alte Version installieren.
 
@@ -60,7 +60,7 @@ und zur Korrektur weitergeben.
 
 ## Bekannte Stolperfallen
 
-- **Akkuoptimierung (Xiaomi/HyperOS):** Einstellungen → Apps → Rollentrainer → Energiesparen →
+- **Akkuoptimierung (OS):** Einstellungen → Apps → Rollentrainer → Energiesparen →
   **„Keine Beschränkungen“**. Sonst trennt das System die Bluetooth-Verbindung. Die App weist
   beim ersten Start darauf hin.
 - **Berechtigung:** „Geräte in der Nähe“ muss erlaubt sein (wird beim Start abgefragt).
