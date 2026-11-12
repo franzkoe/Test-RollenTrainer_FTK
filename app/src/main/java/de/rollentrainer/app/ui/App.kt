@@ -49,16 +49,19 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import de.rollentrainer.app.AppViewModel
+import de.rollentrainer.app.Engine
 import de.rollentrainer.app.Screen
 import de.rollentrainer.app.ble.ConnState
+import de.rollentrainer.app.data.ExportFormat
 
 @Composable
 fun App(
-    vm: AppViewModel,
+    vm: Engine,
     requestPermissions: () -> Unit,
     enableBluetooth: () -> Unit,
     openBatterySettings: () -> Unit,
+    onShare: (ExportFormat) -> Unit,
+    onSave: (ExportFormat) -> Unit,
 ) {
     val light by vm.lightTheme.collectAsState()
     RollentrainerTheme(light) {
@@ -73,6 +76,9 @@ fun App(
                         Screen.WORKOUTS -> WorkoutListScreen(vm)
                         Screen.EDITOR -> WorkoutEditorScreen(vm)
                         Screen.WORKOUT_RUN -> WorkoutRunScreen(vm)
+                        Screen.SUMMARY -> SummaryScreen(vm)
+                        Screen.HISTORY -> HistoryScreen(vm)
+                        Screen.RIDE_DETAIL -> RideDetailScreen(vm, onShare, onSave)
                     }
                 }
 
@@ -108,8 +114,9 @@ fun App(
                             Text(
                                 "Xiaomi/HyperOS beendet Bluetooth-Verbindungen von Apps, die " +
                                     "Akku sparen sollen. Stelle für diese App bitte " +
-                                    "„Keine Beschränkungen“ ein, damit die Verbindung zum " +
-                                    "Trainer während der Fahrt stabil bleibt.",
+                                    "„Keine Beschränkungen“ ein, damit Verbindung und " +
+                                    "Aufzeichnung auch im Standby und im Hintergrund " +
+                                    "weiterlaufen.",
                                 fontSize = 16.sp,
                             )
                         },
@@ -132,7 +139,7 @@ fun App(
 /** Banner für fehlende Berechtigung bzw. ausgeschaltetes Bluetooth. */
 @Composable
 fun EnvironmentBanners(
-    vm: AppViewModel,
+    vm: Engine,
     requestPermissions: () -> Unit,
     enableBluetooth: () -> Unit,
 ) {
@@ -172,14 +179,16 @@ private fun Banner(text: String, button: String, onClick: () -> Unit) {
 // ---------------------------------------------------------------- Hauptmenü
 
 @Composable
-fun HomeScreen(vm: AppViewModel, requestPermissions: () -> Unit, enableBluetooth: () -> Unit) {
+fun HomeScreen(vm: Engine, requestPermissions: () -> Unit, enableBluetooth: () -> Unit) {
     val conn by vm.connState.collectAsState()
     val light by vm.lightTheme.collectAsState()
+    val screenOn by vm.keepScreenOn.collectAsState()
+    val rides by vm.rides.collectAsState()
     Column(Modifier.fillMaxSize()) {
         TopBar("Rollentrainer", conn)
         Column(
             Modifier.fillMaxSize().padding(horizontal = 16.dp).padding(bottom = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             EnvironmentBanners(vm, requestPermissions, enableBluetooth)
             MenuTile(
@@ -207,11 +216,27 @@ fun HomeScreen(vm: AppViewModel, requestPermissions: () -> Unit, enableBluetooth
                 modifier = Modifier.weight(1f),
                 onClick = { vm.open(Screen.WORKOUTS) },
             )
-            TextButton(
-                onClick = { vm.toggleTheme() },
-                modifier = Modifier.align(Alignment.CenterHorizontally),
+            MenuTile(
+                emoji = "📈",
+                title = "Verlauf",
+                subtitle = when (rides.size) {
+                    0 -> "Aufgezeichnete Fahrten ansehen und exportieren"
+                    1 -> "1 gespeicherte Fahrt"
+                    else -> "${rides.size} gespeicherte Fahrten"
+                },
+                modifier = Modifier.weight(1f),
+                onClick = { vm.openHistory() },
+            )
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
             ) {
-                Text(if (light) "Dunkles Design verwenden" else "Helles Design verwenden")
+                TextButton(onClick = { vm.toggleTheme() }) {
+                    Text(if (light) "Design: hell" else "Design: dunkel")
+                }
+                TextButton(onClick = { vm.toggleKeepScreenOn() }) {
+                    Text(if (screenOn) "Bildschirm bleibt an" else "Bildschirm darf ausgehen")
+                }
             }
         }
     }
@@ -234,10 +259,10 @@ private fun MenuTile(
             .padding(horizontal = 24.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(emoji, fontSize = 48.sp)
+        Text(emoji, fontSize = 40.sp)
         Spacer(Modifier.width(20.dp))
         Column {
-            Text(title, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+            Text(title, fontSize = 26.sp, fontWeight = FontWeight.Bold)
             Text(
                 subtitle,
                 fontSize = 15.sp,

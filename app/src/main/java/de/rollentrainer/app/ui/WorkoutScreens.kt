@@ -72,7 +72,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import de.rollentrainer.app.AppViewModel
+import de.rollentrainer.app.Engine
 import de.rollentrainer.app.RunUi
 import de.rollentrainer.app.data.MAX_WATTS
 import de.rollentrainer.app.data.Workout
@@ -81,7 +81,7 @@ import kotlin.math.roundToInt
 // ================================================================ Liste
 
 @Composable
-fun WorkoutListScreen(vm: AppViewModel) {
+fun WorkoutListScreen(vm: Engine) {
     val workouts by vm.workouts.collectAsState()
     val conn by vm.connState.collectAsState()
     var deleteTarget by remember { mutableStateOf<Workout?>(null) }
@@ -196,7 +196,7 @@ private fun WorkoutCard(
 // ================================================================ Editor
 
 @Composable
-fun WorkoutEditorScreen(vm: AppViewModel) {
+fun WorkoutEditorScreen(vm: Engine) {
     val w by vm.editing.collectAsState()
     val conn by vm.connState.collectAsState()
 
@@ -416,14 +416,16 @@ private fun Stepper(
 // ================================================================ Trainingsansicht
 
 @Composable
-fun WorkoutRunScreen(vm: AppViewModel) {
+fun WorkoutRunScreen(vm: Engine) {
     val run by vm.run.collectAsState()
     val data by vm.bike.collectAsState()
     val conn by vm.connState.collectAsState()
-    val base by vm.baseline.collectAsState()
+    val live by vm.live.collectAsState()
+    val heartRate by vm.heartRate.collectAsState()
+    val screenOn by vm.keepScreenOn.collectAsState()
     var askEnd by remember { mutableStateOf(false) }
 
-    KeepScreenOn()
+    KeepScreenOn(screenOn)
     // Zurück-Taste verhält sich wie „Beenden“ (mit Bestätigung)
     BackHandler { if (!run.finished) askEnd = true }
 
@@ -451,7 +453,7 @@ fun WorkoutRunScreen(vm: AppViewModel) {
             countdown != null -> BigCountdown(countdown)
 
             run.phases.isNotEmpty() -> {
-                val metrics = buildMetrics(data, base.first, base.second)
+                val metrics = buildMetrics(data, heartRate, live.distanceM, live.kcal)
                 if (landscape) {
                     Row(
                         Modifier.fillMaxSize().padding(horizontal = 16.dp),

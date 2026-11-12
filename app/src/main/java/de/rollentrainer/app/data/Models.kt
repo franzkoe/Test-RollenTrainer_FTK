@@ -20,7 +20,11 @@
 
 package de.rollentrainer.app.data
 
-data class SavedDevice(val address: String, val name: String)
+const val TYPE_TRAINER = "trainer"
+const val TYPE_HR = "hr"
+
+/** Gespeichertes Gerät; [type] ist [TYPE_TRAINER] oder [TYPE_HR] (Pulsmesser). */
+data class SavedDevice(val address: String, val name: String, val type: String = TYPE_TRAINER)
 
 enum class PhaseType { WARMUP, INTERVAL, REST, COOLDOWN }
 
@@ -66,3 +70,54 @@ val LEVEL_WATTS = intArrayOf(
 
 const val MAX_LEVEL = 20
 const val MAX_WATTS = 600
+
+// ---------------------------------------------------------------- Aufzeichnung
+
+/** Ein Messpunkt pro Sekunde aktiver Fahrzeit. */
+data class Sample(
+    val tSec: Int,
+    val epochMs: Long,
+    val powerW: Int?,
+    val speedKmh: Double?,
+    val distanceM: Double,
+    val cadenceRpm: Double?,
+    val heartRate: Int?,
+)
+
+data class RideSummary(
+    val id: String,
+    val name: String,
+    val startMs: Long,
+    val durationSec: Int,
+    val distanceM: Double,
+    val avgPower: Int?,
+    val maxPower: Int?,
+    val avgSpeed: Double?,
+    val maxSpeed: Double?,
+    val avgHr: Int?,
+    val maxHr: Int?,
+    val avgCadence: Int?,
+    val kcal: Int?,
+)
+
+fun summarize(id: String, name: String, samples: List<Sample>, kcal: Int?): RideSummary {
+    val p = samples.mapNotNull { it.powerW }
+    val v = samples.mapNotNull { it.speedKmh }
+    val h = samples.mapNotNull { it.heartRate }.filter { it > 0 }
+    val c = samples.mapNotNull { it.cadenceRpm }
+    return RideSummary(
+        id = id,
+        name = name,
+        startMs = samples.firstOrNull()?.let { it.epochMs - it.tSec * 1000L } ?: System.currentTimeMillis(),
+        durationSec = samples.lastOrNull()?.tSec ?: 0,
+        distanceM = samples.lastOrNull()?.distanceM ?: 0.0,
+        avgPower = if (p.isEmpty()) null else Math.round(p.average()).toInt(),
+        maxPower = p.maxOrNull(),
+        avgSpeed = if (v.isEmpty()) null else v.average(),
+        maxSpeed = v.maxOrNull(),
+        avgHr = if (h.isEmpty()) null else Math.round(h.average()).toInt(),
+        maxHr = h.maxOrNull(),
+        avgCadence = if (c.isEmpty()) null else Math.round(c.average()).toInt(),
+        kcal = kcal,
+    )
+}

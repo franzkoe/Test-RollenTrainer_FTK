@@ -154,16 +154,16 @@ class FtmsManager(private val context: Context, private val scope: CoroutineScop
         }
     }
 
-    /** Startet den Scan. Standard: nur FTMS-Geräte; [showAll] zeigt alle BLE-Geräte. */
-    fun startScan(showAll: Boolean) {
+    /** Startet den Scan nach Geräten mit dem Dienst [service]; null zeigt alle BLE-Geräte. */
+    fun startScan(service: UUID?) {
         if (!usable()) return
         stopScan()
         _found.value = emptyList()
         val scanner = adapter?.bluetoothLeScanner ?: return
-        val filters = if (showAll) {
+        val filters = if (service == null) {
             emptyList()
         } else {
-            listOf(ScanFilter.Builder().setServiceUuid(ParcelUuid(FTMS_SERVICE)).build())
+            listOf(ScanFilter.Builder().setServiceUuid(ParcelUuid(service)).build())
         }
         val settings = ScanSettings.Builder()
             .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)

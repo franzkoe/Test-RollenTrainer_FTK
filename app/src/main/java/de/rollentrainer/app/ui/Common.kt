@@ -132,10 +132,10 @@ fun StatusChip(conn: ConnState) {
 // ---------------------------------------------------------------- Helfer
 
 @Composable
-fun KeepScreenOn() {
+fun KeepScreenOn(on: Boolean) {
     val view = LocalView.current
-    DisposableEffect(view) {
-        view.keepScreenOn = true
+    DisposableEffect(view, on) {
+        view.keepScreenOn = on
         onDispose { view.keepScreenOn = false }
     }
 }
@@ -179,23 +179,22 @@ fun BigCountdown(value: Int) {
 
 data class Metric(val label: String, val value: String, val unit: String)
 
-/** Baut die Kachelliste – nur Werte, die der Trainer tatsächlich liefert. */
-fun buildMetrics(d: BikeData, baseDistance: Int, baseEnergy: Int): List<Metric> {
+/**
+ * Baut die Kachelliste – nur Werte, die tatsächlich vorliegen. Strecke und Kalorien rechnet die
+ * App für die laufende Einheit selbst mit, der Puls kommt vom Pulsmesser oder vom Trainer.
+ */
+fun buildMetrics(d: BikeData, heartRate: Int?, distanceM: Double, kcal: Int?): List<Metric> {
     val list = ArrayList<Metric>()
     d.powerW?.let { list.add(Metric("Leistung", it.toString(), "W")) }
     d.cadenceRpm?.let { list.add(Metric("Kadenz", it.roundToInt().toString(), "rpm")) }
     d.speedKmh?.let {
         list.add(Metric("Geschwindigkeit", String.format(Locale.GERMANY, "%.1f", it), "km/h"))
     }
-    d.distanceM?.let {
-        val m = if (it >= baseDistance) it - baseDistance else it
-        list.add(Metric("Distanz", String.format(Locale.GERMANY, "%.2f", m / 1000.0), "km"))
+    if (d.speedKmh != null || d.distanceM != null) {
+        list.add(Metric("Distanz", String.format(Locale.GERMANY, "%.2f", distanceM / 1000.0), "km"))
     }
-    d.energyKcal?.let {
-        val k = if (it >= baseEnergy) it - baseEnergy else it
-        list.add(Metric("Kalorien", k.toString(), "kcal"))
-    }
-    d.heartRate?.let { if (it > 0) list.add(Metric("Herzfrequenz", it.toString(), "bpm")) }
+    kcal?.let { list.add(Metric("Kalorien", it.toString(), "kcal")) }
+    heartRate?.let { list.add(Metric("Herzfrequenz", it.toString(), "bpm")) }
     return list
 }
 

@@ -63,20 +63,24 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import de.rollentrainer.app.AppViewModel
+import de.rollentrainer.app.Engine
 import de.rollentrainer.app.ble.ConnState
 import de.rollentrainer.app.data.SavedDevice
+import de.rollentrainer.app.data.TYPE_HR
+import de.rollentrainer.app.data.TYPE_TRAINER
 
 @Composable
-fun DevicesScreen(vm: AppViewModel, requestPermissions: () -> Unit, enableBluetooth: () -> Unit) {
+fun DevicesScreen(vm: Engine, requestPermissions: () -> Unit, enableBluetooth: () -> Unit) {
     val devices by vm.devices.collectAsState()
     val conn by vm.connState.collectAsState()
     val connAddress by vm.connectedAddress.collectAsState()
+    val hrConn by vm.hrState.collectAsState()
+    val hrAddress by vm.hrAddress.collectAsState()
     val perms by vm.permissionsGranted.collectAsState()
     val btOn by vm.btEnabled.collectAsState()
     val status by vm.trainerStatus.collectAsState()
 
-    var showScan by remember { mutableStateOf(false) }
+    var scanType by remember { mutableStateOf<String?>(null) }
     var renameTarget by remember { mutableStateOf<SavedDevice?>(null) }
     var deleteTarget by remember { mutableStateOf<SavedDevice?>(null) }
 
@@ -95,18 +99,23 @@ fun DevicesScreen(vm: AppViewModel, requestPermissions: () -> Unit, enableBlueto
             if (devices.isEmpty()) {
                 Text(
                     "Noch kein Gerät gespeichert. Schalte den Trainer ein und tippe auf " +
-                        "„Neues Gerät hinzufügen“.",
+                        "„Trainer hinzufügen“. Ein Pulsmesser (Brustgurt, Armband oder Uhr " +
+                        "mit Herzfrequenz-Übertragung) lässt sich zusätzlich verbinden.",
                     fontSize = 16.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             devices.forEach { d ->
-                val state = if (connAddress == d.address) conn else ConnState.DISCONNECTED
+                val state = if (d.type == TYPE_HR) {
+                    if (hrAddress == d.address) hrConn else ConnState.DISCONNECTED
+                } else {
+                    if (connAddress == d.address) conn else ConnState.DISCONNECTED
+                }
                 DeviceCard(
                     device = d,
                     state = state,
                     onConnect = { vm.connectDevice(d) },
-                    onDisconnect = { vm.disconnectDevice() },
+                    onDisconnect = { vm.disconnectDevice(d) },
                     onRename = { renameTarget = d },
                     onDelete = { deleteTarget = d },
                 )
@@ -119,17 +128,39 @@ fun DevicesScreen(vm: AppViewModel, requestPermissions: () -> Unit, enableBlueto
                 )
             }
         }
-        Button(
-            onClick = { showScan = true },
-            enabled = perms && btOn,
-            modifier = Modifier.fillMaxWidth().padding(16.dp).height(64.dp),
+        Row(
+            Modifier.fillMaxWidth().padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text("＋  Neues Gerät hinzufügen", fontSize = 19.sp, fontWeight = FontWeight.SemiBold)
+            Button(
+                onClick = { scanType = TYPE_TRAINER },
+                enabled = perms && btOn,
+                modifier = Modifier.weight(1f).height(64.dp),
+            ) {
+                Text(
+                    "＋ Trainer",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                )
+            }
+            FilledTonalButton(
+                onClick = { scanType = TYPE_HR },
+                enabled = perms && btOn,
+                modifier = Modifier.weight(1f).height(64.dp),
+            ) {
+                Text(
+                    "＋ Pulsmesser",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                )
+            }
         }
     }
 
-    if (showScan) {
-        ScanDialog(vm, onClose = { showScan = false })
+    scanType?.let { type ->
+        ScanDialog(vm, type, onClose = { scanType = null })
     }
 
     renameTarget?.let { target ->
@@ -200,6 +231,12 @@ private fun DeviceCard(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
+                Text(
+                    if (device.type == TYPE_HR) "♥ Pulsmesser" else "Trainer",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
                 Text(device.name, fontSize = 21.sp, fontWeight = FontWeight.Bold)
                 Text(
                     device.address,
@@ -240,22 +277,25 @@ private fun DeviceCard(
     }
 }
 
-/** BLE-Scan nach FTMS-Geräten; Antippen verbindet und speichert das Gerät. */
+/** BLE-Scan nach Trainern (FTMS) bzw. Pulsmessern; Antippen verbindet und speichert das Gerät. */
 @Composable
-private fun ScanDialog(vm: AppViewModel, onClose: () -> Unit) {
+private fun ScanDialog(vm: Engine, type: String, onClose: () -> Unit) {
     val found by vm.foundDevices.collectAsState()
     val scanning by vm.scanning.collectAsState()
     val saved by vm.devices.collectAsState()
     var showAll by remember { mutableStateOf(false) }
 
-    LaunchedEffect(showAll) { vm.startScan(showAll) }
+    LaunchedEffect(showAll) { vm.startScan(type, showAll) }
     DisposableEffect(Unit) { onDispose { vm.stopScan() } }
 
     AlertDialog(
         onDismissRequest = onClose,
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Trainer suchen", modifier = Modifier.weight(1f))
+                Text(
+                    if (type == TYPE_HR) "Pulsmesser suchen" else "Trainer suchen",
+                    modifier = Modifier.weight(1f),
+                )
                 if (scanning) CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 3.dp)
             }
         },
@@ -270,8 +310,13 @@ private fun ScanDialog(vm: AppViewModel, onClose: () -> Unit) {
                 ) {
                     if (found.isEmpty()) {
                         Text(
-                            "Suche läuft … Trainer einschalten und kurz treten, damit er " +
-                                "aufwacht. Er darf mit keiner anderen App verbunden sein.",
+                            if (type == TYPE_HR) {
+                                "Suche läuft … Pulsmesser anlegen, damit er sendet. Bei Uhren " +
+                                    "„Herzfrequenz übertragen“ einschalten."
+                            } else {
+                                "Suche läuft … Trainer einschalten und kurz treten, damit er " +
+                                    "aufwacht. Er darf mit keiner anderen App verbunden sein."
+                            },
                             fontSize = 15.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -284,7 +329,7 @@ private fun ScanDialog(vm: AppViewModel, onClose: () -> Unit) {
                                 .clip(RoundedCornerShape(14.dp))
                                 .background(MaterialTheme.colorScheme.surfaceVariant)
                                 .clickable {
-                                    vm.addDevice(f)
+                                    vm.addDevice(f, type)
                                     onClose()
                                 }
                                 .padding(14.dp),

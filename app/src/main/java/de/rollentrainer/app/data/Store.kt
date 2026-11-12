@@ -42,6 +42,8 @@ class Store(private val context: Context) {
     private val keyLastDevice = stringPreferencesKey("last_device")
     private val keyBatteryHint = booleanPreferencesKey("battery_hint_shown")
     private val keyLightTheme = booleanPreferencesKey("light_theme")
+    private val keyLastHr = stringPreferencesKey("last_hr")
+    private val keyScreenOn = booleanPreferencesKey("keep_screen_on")
 
     val devices: Flow<List<SavedDevice>> =
         context.dataStore.data.map { parseDevices(it[keyDevices]) }
@@ -56,10 +58,26 @@ class Store(private val context: Context) {
 
     val lightTheme: Flow<Boolean> = context.dataStore.data.map { it[keyLightTheme] ?: false }
 
+    val lastHr: Flow<String?> = context.dataStore.data.map { it[keyLastHr] }
+
+    val keepScreenOn: Flow<Boolean> = context.dataStore.data.map { it[keyScreenOn] ?: true }
+
+    suspend fun setLastHr(address: String?) {
+        context.dataStore.edit {
+            if (address == null) it.remove(keyLastHr) else it[keyLastHr] = address
+        }
+    }
+
+    suspend fun setKeepScreenOn(on: Boolean) {
+        context.dataStore.edit { it[keyScreenOn] = on }
+    }
+
     suspend fun saveDevices(list: List<SavedDevice>) {
         val arr = JSONArray()
         list.forEach { d ->
-            arr.put(JSONObject().put("address", d.address).put("name", d.name))
+            arr.put(
+                JSONObject().put("address", d.address).put("name", d.name).put("type", d.type)
+            )
         }
         context.dataStore.edit { it[keyDevices] = arr.toString() }
     }
@@ -105,7 +123,11 @@ class Store(private val context: Context) {
             val arr = JSONArray(json)
             (0 until arr.length()).map { i ->
                 val o = arr.getJSONObject(i)
-                SavedDevice(o.getString("address"), o.getString("name"))
+                SavedDevice(
+                    o.getString("address"),
+                    o.getString("name"),
+                    o.optString("type", TYPE_TRAINER),
+                )
             }
         } catch (e: Exception) {
             emptyList()

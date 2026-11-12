@@ -64,19 +64,21 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import de.rollentrainer.app.AppViewModel
+import de.rollentrainer.app.Engine
 import de.rollentrainer.app.data.LEVEL_WATTS
 import de.rollentrainer.app.data.MAX_LEVEL
 
 @Composable
-fun FreeRideScreen(vm: AppViewModel) {
+fun FreeRideScreen(vm: Engine) {
     val ride by vm.ride.collectAsState()
     val data by vm.bike.collectAsState()
     val conn by vm.connState.collectAsState()
-    val base by vm.baseline.collectAsState()
+    val live by vm.live.collectAsState()
+    val heartRate by vm.heartRate.collectAsState()
+    val screenOn by vm.keepScreenOn.collectAsState()
     var askEnd by remember { mutableStateOf(false) }
 
-    KeepScreenOn()
+    KeepScreenOn(screenOn)
     // Auch die System-Zurück-Geste löst den Dialog aus
     BackHandler { askEnd = true }
 
@@ -90,7 +92,7 @@ fun FreeRideScreen(vm: AppViewModel) {
         if (countdown != null) {
             BigCountdown(countdown)
         } else {
-            val metrics = buildMetrics(data, base.first, base.second)
+            val metrics = buildMetrics(data, heartRate, live.distanceM, live.kcal)
             if (landscape) {
                 Row(
                     Modifier.fillMaxSize().padding(horizontal = 16.dp),
