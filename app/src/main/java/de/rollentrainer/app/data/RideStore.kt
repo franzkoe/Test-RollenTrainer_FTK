@@ -22,6 +22,8 @@ package de.rollentrainer.app.data
 
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -72,6 +74,53 @@ class RideStore(context: Context) {
         metaFile(id).delete()
         dataFile(id).delete()
         Unit
+    }
+
+    // ---------------------------------------------------------------- Entwurf
+
+    /** Noch nicht gespeicherte (laufende oder gerade beendete) Fahrt. */
+    class Draft(val name: String, val kcal: Int?, val samples: List<Sample>)
+
+    private val draftFile = File(dir, "draft.json")
+    private val draftLock = Mutex()
+
+    /**
+     * Sichert die laufende Aufzeichnung, damit sie nicht verloren geht, falls das System die App
+     * beendet, bevor „Speichern“ oder „Verwerfen“ gewählt wurde.
+     */
+    suspend fun saveDraft(name: String, kcal: Int?, samples: List<Sample>) = draftLock.withLock {
+        withContext(Dispatchers.IO) {
+            try {
+                dir.mkdirs()
+                val tmp = File(dir, "draft.tmp")
+                tmp.writeText(
+                    samplesToJson(samples).put("name", name).putOpt2("kcal", kcal).toString()
+                )
+                tmp.renameTo(draftFile)
+            } catch (e: Exception) {
+                // Entwurf ist nur eine Absicherung
+            }
+            Unit
+        }
+    }
+
+    suspend fun loadDraft(): Draft? = draftLock.withLock {
+        withContext(Dispatchers.IO) {
+            try {
+                if (!draftFile.exists()) return@withContext null
+                val o = JSONObject(draftFile.readText())
+                Draft(o.getString("name"), o.intOrNull("kcal"), parseSamples(o))
+            } catch (e: Exception) {
+                null
+            }
+        }
+    }
+
+    suspend fun clearDraft() = draftLock.withLock {
+        withContext(Dispatchers.IO) {
+            draftFile.delete()
+            Unit
+        }
     }
 
     // ---------------------------------------------------------------- JSON

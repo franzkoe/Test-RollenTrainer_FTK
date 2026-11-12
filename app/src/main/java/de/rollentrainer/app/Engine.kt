@@ -243,6 +243,20 @@ class Engine private constructor(private val app: Context) {
             if (!store.batteryHintShown.first()) _batteryHint.value = true
         }
         reloadRides()
+        // Nicht gespeicherte Fahrt aus einem früheren App-Lauf wiederherstellen
+        scope.launch {
+            val draft = rideStore.loadDraft() ?: return@launch
+            if (sessionRunning || _pending.value != null) return@launch
+            if (draft.samples.size < 2) {
+                rideStore.clearDraft()
+                return@launch
+            }
+            val summary = summarize(
+                UUID.randomUUID().toString(), draft.name, draft.samples, draft.kcal
+            )
+            _pending.value = RideDetail(summary, draft.samples)
+            if (_screen.value == Screen.HOME) _screen.value = Screen.SUMMARY
+        }
     }
 
     // ------------------------------------------------------------------ Umgebung
@@ -501,6 +515,16 @@ class Engine private constructor(private val app: Context) {
             Sample(sec, System.currentTimeMillis(), power, speed, recDist, d.cadenceRpm, heartRate.value)
         )
         _live.value = LiveExtra(recDist, kcal)
+
+        // Alle 30 s zwischenspeichern, damit bei einem Abbruch höchstens das verloren geht
+        if (samples.size % 30 == 0) saveDraft()
+    }
+
+    private fun saveDraft() {
+        val list = samples.toList()
+        val name = recName
+        val kcal = _live.value.kcal
+        scope.launch { rideStore.saveDraft(name, kcal, list) }
     }
 
     /** Nach dem Ende: Zusammenfassung mit „Speichern“/„Verwerfen“ – oder direkt ins Hauptmenü. */
@@ -514,7 +538,9 @@ class Engine private constructor(private val app: Context) {
             val summary = summarize(UUID.randomUUID().toString(), recName, list, _live.value.kcal)
             _pending.value = RideDetail(summary, list)
             _screen.value = Screen.SUMMARY
+            saveDraft() // bleibt erhalten, bis „Speichern“ oder „Verwerfen“ gewählt wurde
         } else {
+            scope.launch { rideStore.clearDraft() }
             _screen.value = Screen.HOME
         }
     }
@@ -537,6 +563,7 @@ class Engine private constructor(private val app: Context) {
         if (p != null) {
             scope.launch {
                 rideStore.save(p.summary, p.samples)
+                rideStore.clearDraft()
                 _rides.value = rideStore.list()
             }
         }
@@ -545,6 +572,7 @@ class Engine private constructor(private val app: Context) {
     fun discardPending() {
         _pending.value = null
         _screen.value = Screen.HOME
+        scope.launch { rideStore.clearDraft() }
     }
 
     /** Titel und Text der Benachrichtigung während einer Einheit. */

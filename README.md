@@ -3,12 +3,37 @@
 Kotlin · Jetpack Compose (Material 3) · Bluetooth Low Energy (Fitness Machine Service)
 
 Die App scannt und verbindet den Trainer selbst (kein Koppeln in den Android-Einstellungen),
-steuert den Widerstand im ERG-Modus und bietet **Geräte**, **Freie Fahrt** (21 Stufen) und
-**Trainingsauswahl** (Intervall-Vorlagen). Es werden keine Fahrdaten aufgezeichnet.
+steuert den Widerstand im ERG-Modus und bietet **Geräte**, **Freie Fahrt** (21 Stufen),
+**Trainingsauswahl** (Intervall-Vorlagen) und **Verlauf** (aufgezeichnete Fahrten).
 
-> **Stand:** Der Code wurde ohne Android-SDK geschrieben. Geprüft sind Syntax und Typen
-> (gegen nachgebildete Android-/Compose-Schnittstellen) sowie Parser- und Ablauflogik per Test.
-> Ein echter Gradle-Build und ein Test am Trainer stehen noch aus.
+## Version 2.0
+
+- **Aufzeichnung:** Jede Freie Fahrt und jedes Training wird sekündlich mitgeschrieben
+  (Leistung, Geschwindigkeit, Strecke, Kadenz, Puls). Beim Beenden fragt die App, ob die Fahrt
+  **gespeichert** oder **verworfen** werden soll.
+- **Verlauf:** Liste aller gespeicherten Fahrten mit Zusammenfassung und Verlaufskurven.
+- **Export:** FIT und TCX – teilen (Strava, Garmin Connect, intervals.icu, Mail …) oder als
+  Datei speichern.
+- **Weiterlaufen im Hintergrund:** Verbindung, Zeit, Trainingsablauf und Aufzeichnung laufen
+  weiter, wenn das Smartphone im Standby ist oder eine andere App geöffnet wird. Währenddessen
+  zeigt eine Benachrichtigung den aktuellen Stand.
+- **Pulsmesser:** Brustgurte, Armbänder und Uhren mit Bluetooth-Herzfrequenz lassen sich
+  zusätzlich zum Trainer verbinden.
+
+### Version 1.0 weiterhin verfügbar
+
+Die bisherige Version (ohne Aufzeichnung) bleibt abrufbar:
+
+- **APK:** unter [Releases](../../releases) der Eintrag
+  [Rollentrainer 1.0.4](../../releases/tag/v1.0.4)
+- **Quellcode:** Zweig [`version-1.0`](../../tree/version-1.0)
+
+Version 2.0 lässt sich direkt über 1.0 installieren, Geräte und Trainings bleiben erhalten.
+Der Weg zurück von 2.0 auf 1.0 erfordert, die App vorher zu deinstallieren (Android erlaubt
+kein Herabstufen); dabei gehen die gespeicherten Daten verloren.
+
+> **Stand:** Die APK wird per GitHub Actions gebaut; FIT- und TCX-Export sind mit unabhängigen
+> Lesern geprüft. Ein Test am echten Trainer, mit Pulsmesser und im Standby steht noch aus.
 
 ---
 
@@ -57,6 +82,10 @@ und zur Korrektur weitergeben.
 - **Freie Fahrt:** Countdown, dann Stufe 0 (Leerlauf). Mit „–“/„+“ in 21 Stufen bis 550 W.
 - **Trainingsauswahl:** Vorlagen anlegen (Aufwärmen, Intervall, Pause, Wiederholungen,
   optional Ausfahren), speichern, starten, duplizieren, löschen.
+- **Pulsmesser:** Unter „Geräte“ auf „＋ Pulsmesser“ tippen. Bei Uhren vorher
+  „Herzfrequenz übertragen“ einschalten. Geräte, die nur ANT+ senden, funktionieren nicht.
+- **Verlauf:** Fahrt antippen → Kurven ansehen, umbenennen, löschen oder exportieren.
+- **Bildschirm:** Im Hauptmenü lässt sich wählen, ob der Bildschirm während der Fahrt an bleibt.
 
 ## Bekannte Stolperfallen
 
@@ -64,7 +93,17 @@ und zur Korrektur weitergeben.
   **„Keine Beschränkungen“**. Sonst trennt das System die Bluetooth-Verbindung. Die App weist
   beim ersten Start darauf hin.
 - **Berechtigung:** „Geräte in der Nähe“ muss erlaubt sein (wird beim Start abgefragt).
-  Standort wird nicht benötigt.
+  Standort wird nicht benötigt. „Benachrichtigungen“ sollte erlaubt sein, damit die laufende
+  Einheit angezeigt wird.
+- **Standby/Hintergrund:** Manche Hersteller beenden Apps im Hintergrund besonders streng.
+  Hilft die Akku-Einstellung allein nicht, zusätzlich „Autostart“ erlauben und die App in der
+  Übersicht der zuletzt genutzten Apps sperren (Schloss-Symbol).
+- **Abbruch durch das System:** Die laufende Aufzeichnung wird alle 30 Sekunden gesichert.
+  Wird die App beendet, bietet sie die Fahrt beim nächsten Start zum Speichern an.
+- **Strecke und Geschwindigkeit** sind auf der Rolle rechnerische Werte des Trainers. Die
+  Strecke summiert die App aus der Geschwindigkeit.
+- **Kalorien:** Liefert der Trainer keinen Wert, schätzt die App ihn aus der Leistung
+  (1 kJ Arbeit ≈ 1 kcal).
 - **Nur eine App gleichzeitig:** Der Trainer darf nicht mit Zwift, MyWhoosh, OneLap o. Ä.
   verbunden sein – diese Apps vorher vollständig schließen.
 - **Nicht in den Bluetooth-Einstellungen koppeln.** Die App verbindet direkt.
@@ -81,15 +120,19 @@ und zur Korrektur weitergeben.
 
 ```
 app/src/main/java/de/rollentrainer/app/
-├── MainActivity.kt        Berechtigungen, Einstieg
-├── AppViewModel.kt        Navigation, Freie Fahrt, Trainingsablauf (MVVM, Coroutines/Flow)
+├── MainActivity.kt        Berechtigungen, Einstieg, Export (Teilen/Speichern)
+├── Engine.kt              Navigation, Freie Fahrt, Trainingsablauf, Aufzeichnung (Coroutines/Flow)
+├── RideService.kt         Vordergrunddienst für Standby/Hintergrund
 ├── ble/
 │   ├── FtmsManager.kt     Scan, Verbindung, Reconnect, GATT-Queue, Control Point
-│   └── FtmsParser.kt      Indoor Bike Data, Power Range, Antworten
+│   ├── FtmsParser.kt      Indoor Bike Data, Power Range, Antworten
+│   └── HrManager.kt       Pulsmesser (Heart Rate Service)
 ├── data/
-│   ├── Models.kt          Gerät, Training, Phasen, Stufentabelle
-│   └── Store.kt           Speicherung (DataStore)
-└── ui/                    Compose-Oberfläche (Hauptmenü, Geräte, Freie Fahrt, Trainings)
+│   ├── Models.kt          Gerät, Training, Phasen, Stufentabelle, Fahrt, Messpunkt
+│   ├── Store.kt           Einstellungen, Geräte, Trainings (DataStore)
+│   ├── RideStore.kt       Gespeicherte Fahrten (Dateien)
+│   └── Export.kt          FIT- und TCX-Export
+└── ui/                    Compose-Oberfläche (Hauptmenü, Geräte, Freie Fahrt, Trainings, Verlauf)
 ```
 
 ## Lizenz
