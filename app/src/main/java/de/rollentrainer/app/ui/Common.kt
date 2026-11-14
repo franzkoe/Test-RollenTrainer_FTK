@@ -382,7 +382,8 @@ fun MetricTile(m: Metric, modifier: Modifier = Modifier, compact: Boolean = fals
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Text(
-            m.label,
+            // In der schmalen Kachel passt das lange Wort nicht
+            if (compact && m.label == "Geschwindigkeit") "Geschw." else m.label,
             fontSize = 13.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,

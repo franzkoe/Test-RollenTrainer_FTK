@@ -20,6 +20,23 @@ steuert den Widerstand im ERG-Modus und bietet **Geräte**, **Freie Fahrt** (21 
 - **Pulsmesser:** Brustgurte, Armbänder und Uhren mit Bluetooth-Herzfrequenz lassen sich
   zusätzlich zum Trainer verbinden.
 
+## Version 2.1 – überarbeitete Oberfläche
+
+Die Oberfläche wurde nach der Methode [unslop](https://github.com/heydamir/unslop) von
+Damir Sokolovsky (@heydamir, CC BY 4.0) überarbeitet. Funktionen und Abläufe sind unverändert.
+
+- **Farben:** eine neutrale Graphit-Reihe für alle Flächen, drei Textrollen, ein Akzent (Petrol).
+  Farbe tragen nur die Intensitätsskala, das Trainingsprofil und die Verlaufskurven.
+- **Symbole:** Linien-Symbole statt Emojis und Sonderzeichen (Stil angelehnt an Lucide, ISC).
+- **Formen:** Radius nach Größe (Bedienelemente 12, Karten 16, Dialoge 20) statt Pillenform,
+  Haarlinien statt getönter Flächen.
+- **Schrift:** ruhigere Gewichte, Zahlen mit Tabellenziffern, Werte in Textfarbe – die
+  Intensität zeigt ein Punkt oder Streifen statt farbiger Schrift.
+- **Hauptmenü:** Geräte und Verlauf als kompakte Zeilen mit aktuellem Stand; Freie Fahrt und
+  Trainingsauswahl als große Kacheln mit Stufenskala bzw. Trainingsprofil.
+- **Leere Seiten:** Hinweis mittig statt oben angeklebt.
+- **Texte:** keine Ausrufezeichen und Emojis mehr („Start“, „Training abgeschlossen“).
+
 ### Version 1.0 weiterhin verfügbar
 
 Die bisherige Version (ohne Aufzeichnung) bleibt abrufbar:
@@ -33,7 +50,8 @@ Der Weg zurück von 2.0 auf 1.0 erfordert, die App vorher zu deinstallieren (And
 kein Herabstufen); dabei gehen die gespeicherten Daten verloren.
 
 > **Stand:** Die APK wird per GitHub Actions gebaut; FIT- und TCX-Export sind mit unabhängigen
-> Lesern geprüft. Ein Test am echten Trainer, mit Pulsmesser und im Standby steht noch aus.
+> Lesern geprüft, die Bildschirme von 2.1 wurden als Bilder gerendert und durchgesehen.
+> Ein Test am echten Trainer, mit Pulsmesser und im Standby steht noch aus.
 
 ---
 

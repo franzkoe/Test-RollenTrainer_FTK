@@ -24,6 +24,7 @@ import android.app.Activity
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
+import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
@@ -31,6 +32,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 
 /*
@@ -105,6 +107,21 @@ private val AppShapes = Shapes(
     extraLarge = RoundedCornerShape(20.dp),
 )
 
+private val Base = Typography()
+
+/** Standardschrift des Systems; Laufweite 0 statt der leichten Sperrung von Material. */
+private val AppTypography = Typography(
+    bodyLarge = Base.bodyLarge.copy(letterSpacing = 0.sp),
+    bodyMedium = Base.bodyMedium.copy(letterSpacing = 0.sp),
+    bodySmall = Base.bodySmall.copy(letterSpacing = 0.sp),
+    labelLarge = Base.labelLarge.copy(letterSpacing = 0.sp),
+    labelMedium = Base.labelMedium.copy(letterSpacing = 0.sp),
+    labelSmall = Base.labelSmall.copy(letterSpacing = 0.sp),
+    titleMedium = Base.titleMedium.copy(letterSpacing = 0.sp),
+    titleSmall = Base.titleSmall.copy(letterSpacing = 0.sp),
+    headlineSmall = Base.headlineSmall.copy(fontSize = 22.sp, lineHeight = 28.sp),
+)
+
 @Composable
 fun RollentrainerTheme(light: Boolean, content: @Composable () -> Unit) {
     val view = LocalView.current
@@ -121,6 +138,7 @@ fun RollentrainerTheme(light: Boolean, content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = if (light) LightColors else DarkColors,
         shapes = AppShapes,
+        typography = AppTypography,
         content = content,
     )
 }

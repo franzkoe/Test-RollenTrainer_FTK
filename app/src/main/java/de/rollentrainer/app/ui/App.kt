@@ -58,6 +58,7 @@ import de.rollentrainer.app.Screen
 import de.rollentrainer.app.ble.ConnState
 import de.rollentrainer.app.data.ExportFormat
 import de.rollentrainer.app.data.MAX_LEVEL
+import de.rollentrainer.app.data.Workout
 import java.util.Locale
 
 @Composable
@@ -248,9 +249,9 @@ fun HomeScreen(vm: Engine, requestPermissions: () -> Unit, enableBluetooth: () -
                 modifier = Modifier.weight(1f),
                 onClick = { vm.open(Screen.WORKOUTS) },
             ) {
-                if (firstWorkout != null) {
-                    WorkoutChart(firstWorkout.phases(), Modifier.fillMaxWidth().height(32.dp))
-                }
+                // Ohne gespeichertes Training: das Profil, mit dem ein neues Training beginnt
+                val preview = firstWorkout ?: Workout(id = "", name = "")
+                WorkoutChart(preview.phases(), Modifier.fillMaxWidth().height(32.dp))
             }
             MenuRow(
                 icon = AppIcons.Chart,
