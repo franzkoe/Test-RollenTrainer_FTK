@@ -26,6 +26,19 @@ jobs:
       - name: APK bauen
         run: gradle :app:assembleRelease --no-daemon --stacktrace
 
+      - name: Bildschirme rendern
+        if: github.ref == 'refs/heads/dev/shots'
+        run: gradle :app:testDebugUnitTest --no-daemon
+
+      - name: Bilder ablegen
+        if: always() && github.ref == 'refs/heads/dev/shots'
+        run: |
+          cd app/build/shots || exit 0
+          git init -q -b shots-out
+          git add -A
+          git -c user.name=ci -c user.email=ci@users.noreply.github.com commit -qm "Bildschirme"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" shots-out
+
       - name: APK umbenennen
         run: cp app/build/outputs/apk/release/app-release.apk Rollentrainer.apk
 
@@ -39,6 +52,6 @@ jobs:
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v2.2.${{ github.run_number }}
-          name: Rollentrainer 2.2.${{ github.run_number }}
+          tag_name: v2.1.${{ github.run_number }}
+          name: Rollentrainer 2.1.${{ github.run_number }}
           files: Rollentrainer.apk
