@@ -35,8 +35,7 @@ import de.rollentrainer.app.ble.FtmsManager
 import de.rollentrainer.app.ble.HrManager
 import de.rollentrainer.app.data.ExportFormat
 import de.rollentrainer.app.data.FitEncoder
-import de.rollentrainer.app.data.LEVEL_WATTS
-import de.rollentrainer.app.data.MAX_LEVEL
+import de.rollentrainer.app.data.LevelConfig
 import de.rollentrainer.app.data.Phase
 import de.rollentrainer.app.data.RideStore
 import de.rollentrainer.app.data.RideSummary
@@ -71,7 +70,7 @@ import java.util.UUID
 import kotlin.math.roundToInt
 
 enum class Screen {
-    HOME, DEVICES, FREE_RIDE, WORKOUTS, EDITOR, WORKOUT_RUN, SUMMARY, HISTORY, RIDE_DETAIL,
+    HOME, DEVICES, SETTINGS, FREE_RIDE, WORKOUTS, EDITOR, WORKOUT_RUN, SUMMARY, HISTORY, RIDE_DETAIL,
 }
 
 /** countdown: 3, 2, 1, 0 (= „Start!“), null = Fahrt läuft. */
@@ -143,6 +142,8 @@ class Engine private constructor(private val app: Context) {
 
     val lightTheme: StateFlow<Boolean> =
         store.lightTheme.stateIn(scope, SharingStarted.Eagerly, false)
+    val levelConfig: StateFlow<LevelConfig> =
+        store.levelConfig.stateIn(scope, SharingStarted.Eagerly, LevelConfig())
     val keepScreenOn: StateFlow<Boolean> =
         store.keepScreenOn.stateIn(scope, SharingStarted.Eagerly, true)
 
@@ -318,6 +319,15 @@ class Engine private constructor(private val app: Context) {
         scope.launch { store.setLightTheme(next) }
     }
 
+    /** Stufenzahl und Maximalleistung der Freien Fahrt ändern (wirkt ab der nächsten Fahrt). */
+    fun setLevelConfig(levels: Int, maxWatts: Int) {
+        val next = LevelConfig(
+            levels.coerceIn(LevelConfig.MIN_LEVELS, LevelConfig.MAX_LEVELS),
+            maxWatts.coerceIn(LevelConfig.MIN_WATTS, LevelConfig.MAX_WATTS),
+        )
+        scope.launch { store.setLevelConfig(next) }
+    }
+
     fun toggleKeepScreenOn() {
         val next = !keepScreenOn.value
         scope.launch { store.setKeepScreenOn(next) }
@@ -337,7 +347,7 @@ class Engine private constructor(private val app: Context) {
                 _screen.value = Screen.HOME
             }
 
-            Screen.WORKOUTS, Screen.HISTORY -> _screen.value = Screen.HOME
+            Screen.WORKOUTS, Screen.HISTORY, Screen.SETTINGS -> _screen.value = Screen.HOME
             Screen.EDITOR -> _screen.value = Screen.WORKOUTS
             Screen.RIDE_DETAIL -> _screen.value = Screen.HISTORY
             else -> Unit
@@ -585,7 +595,7 @@ class Engine private constructor(private val app: Context) {
                 if (r.countdown != null) {
                     "Freie Fahrt" to "Start …"
                 } else {
-                    val w = if (r.level == 0) "Leerlauf" else "${LEVEL_WATTS[r.level]} W"
+                    val w = if (r.level == 0) "Leerlauf" else "${levelConfig.value.watts(r.level)} W"
                     "Freie Fahrt läuft" to "${formatHms(r.elapsedSec)} · Stufe ${r.level} ($w)$actual"
                 }
             }
@@ -640,10 +650,11 @@ class Engine private constructor(private val app: Context) {
     fun changeLevel(delta: Int) {
         val r = _ride.value
         if (r.countdown != null) return
-        val next = (r.level + delta).coerceIn(0, MAX_LEVEL)
+        val config = levelConfig.value
+        val next = (r.level + delta).coerceIn(0, config.levels)
         if (next == r.level) return
         _ride.value = r.copy(level = next)
-        setTarget(LEVEL_WATTS[next])
+        setTarget(config.watts(next))
     }
 
     // ------------------------------------------------------------------ Trainings

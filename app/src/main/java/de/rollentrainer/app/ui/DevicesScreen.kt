@@ -86,11 +86,12 @@ fun DevicesScreen(vm: Engine, requestPermissions: () -> Unit, enableBluetooth: (
     var deleteTarget by remember { mutableStateOf<SavedDevice?>(null) }
 
     BackHandler { vm.back() }
+    val w = win()
 
     Column(Modifier.fillMaxSize()) {
         TopBar("Geräte", conn, onBack = { vm.back() })
         if (devices.isEmpty()) {
-            Column(Modifier.weight(1f).padding(horizontal = 16.dp, vertical = 8.dp)) {
+            Column(Modifier.weight(1f).padding(horizontal = w.gutter, vertical = 8.dp)) {
                 EnvironmentBanners(vm, requestPermissions, enableBluetooth)
                 EmptyState(
                     title = "Noch kein Gerät gespeichert",
@@ -104,17 +105,18 @@ fun DevicesScreen(vm: Engine, requestPermissions: () -> Unit, enableBluetooth: (
             Modifier
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(horizontal = w.gutter, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             EnvironmentBanners(vm, requestPermissions, enableBluetooth)
-            devices.forEach { d ->
+            CardGrid(devices, w.columns) { d, modifier ->
                 val state = if (d.type == TYPE_HR) {
                     if (hrAddress == d.address) hrConn else ConnState.DISCONNECTED
                 } else {
                     if (connAddress == d.address) conn else ConnState.DISCONNECTED
                 }
                 DeviceCard(
+                    modifier = modifier,
                     device = d,
                     state = state,
                     onConnect = { vm.connectDevice(d) },
@@ -131,10 +133,7 @@ fun DevicesScreen(vm: Engine, requestPermissions: () -> Unit, enableBluetooth: (
                 )
             }
         }
-        Row(
-            Modifier.fillMaxWidth().padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
+        BottomBar {
             Button(
                 onClick = { scanType = TYPE_TRAINER },
                 enabled = perms && btOn,
@@ -207,6 +206,7 @@ fun DevicesScreen(vm: Engine, requestPermissions: () -> Unit, enableBluetooth: (
 
 @Composable
 private fun DeviceCard(
+    modifier: Modifier,
     device: SavedDevice,
     state: ConnState,
     onConnect: () -> Unit,
@@ -215,8 +215,7 @@ private fun DeviceCard(
     onDelete: () -> Unit,
 ) {
     Column(
-        Modifier
-            .fillMaxWidth()
+        modifier
             .card()
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),

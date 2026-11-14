@@ -73,8 +73,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import de.rollentrainer.app.ble.BikeData
 import de.rollentrainer.app.ble.ConnState
-import de.rollentrainer.app.data.LEVEL_WATTS
-import de.rollentrainer.app.data.MAX_LEVEL
+import de.rollentrainer.app.data.LevelConfig
+import androidx.compose.ui.platform.LocalConfiguration
 import de.rollentrainer.app.data.Phase
 import java.util.Locale
 import kotlin.math.max
@@ -223,7 +223,10 @@ fun EmptyState(title: String, text: String, modifier: Modifier = Modifier) {
 /** Kopfzeile jeder Seite: gut sichtbare Zurück-Taste, Verbindungsstatus, Titel. */
 @Composable
 fun TopBar(title: String, conn: ConnState, onBack: (() -> Unit)? = null) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+    val w = win()
+    // Bei wenig Höhe (Handy quer) steht der Titel in der Zeile der Zurück-Taste
+    val inline = w.short
+    Column(Modifier.fillMaxWidth().padding(horizontal = w.gutter, vertical = 8.dp)) {
         Row(
             Modifier.fillMaxWidth().height(48.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -236,13 +239,26 @@ fun TopBar(title: String, conn: ConnState, onBack: (() -> Unit)? = null) {
                 ) {
                     IconLabel(AppIcons.Back, "Zurück", fontSize = 16)
                 }
+                if (inline) {
+                    Spacer(Modifier.width(16.dp))
+                    Text(
+                        title,
+                        fontSize = 22.sp,
+                        lineHeight = 28.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Spacer(Modifier.width(16.dp))
+                }
             } else {
                 Text(title, fontSize = 28.sp, lineHeight = 32.sp, fontWeight = FontWeight.Medium)
             }
-            Spacer(Modifier.weight(1f))
+            if (!(inline && onBack != null)) Spacer(Modifier.weight(1f))
             StatusChip(conn)
         }
-        if (onBack != null) {
+        if (onBack != null && !inline) {
             Spacer(Modifier.height(16.dp))
             Text(
                 title,
@@ -353,7 +369,7 @@ fun buildMetrics(d: BikeData, heartRate: Int?, distanceM: Double, kcal: Int?): L
 }
 
 @Composable
-fun MetricGrid(metrics: List<Metric>, columns: Int, compact: Boolean) {
+fun MetricGrid(metrics: List<Metric>, columns: Int, compact: Boolean, large: Boolean = false) {
     if (metrics.isEmpty()) {
         Text(
             "Warte auf Daten vom Trainer …",
@@ -365,7 +381,7 @@ fun MetricGrid(metrics: List<Metric>, columns: Int, compact: Boolean) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         metrics.chunked(columns).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                row.forEach { m -> MetricTile(m, Modifier.weight(1f), compact) }
+                row.forEach { m -> MetricTile(m, Modifier.weight(1f), compact, large) }
                 repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
             }
         }
@@ -374,7 +390,12 @@ fun MetricGrid(metrics: List<Metric>, columns: Int, compact: Boolean) {
 
 /** Kennzahl: Bezeichnung, große Zahl, Einheit – sonst nichts. */
 @Composable
-fun MetricTile(m: Metric, modifier: Modifier = Modifier, compact: Boolean = false) {
+fun MetricTile(
+    m: Metric,
+    modifier: Modifier = Modifier,
+    compact: Boolean = false,
+    large: Boolean = false,
+) {
     Column(
         modifier = modifier
             .card()
@@ -384,7 +405,7 @@ fun MetricTile(m: Metric, modifier: Modifier = Modifier, compact: Boolean = fals
         Text(
             // In der schmalen Kachel passt das lange Wort nicht
             if (compact && m.label == "Geschwindigkeit") "Geschw." else m.label,
-            fontSize = 13.sp,
+            fontSize = if (large) 15.sp else 13.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -392,7 +413,7 @@ fun MetricTile(m: Metric, modifier: Modifier = Modifier, compact: Boolean = fals
         Row(verticalAlignment = Alignment.Bottom) {
             Text(
                 m.value,
-                fontSize = if (compact) 24.sp else 36.sp,
+                fontSize = if (large) 52.sp else if (compact) 24.sp else 36.sp,
                 fontWeight = FontWeight.Medium,
                 style = Tnum,
                 maxLines = 1,
@@ -401,10 +422,12 @@ fun MetricTile(m: Metric, modifier: Modifier = Modifier, compact: Boolean = fals
                 Spacer(Modifier.width(4.dp))
                 Text(
                     m.unit,
-                    fontSize = if (compact) 12.sp else 14.sp,
+                    fontSize = if (large) 18.sp else if (compact) 12.sp else 14.sp,
                     color = MaterialTheme.colorScheme.outline,
                     maxLines = 1,
-                    modifier = Modifier.padding(bottom = if (compact) 4.dp else 6.dp),
+                    modifier = Modifier.padding(
+                        bottom = if (large) 8.dp else if (compact) 4.dp else 6.dp
+                    ),
                 )
             }
         }
@@ -453,22 +476,98 @@ fun WorkoutChart(phases: List<Phase>, modifier: Modifier = Modifier, progress: F
 // ---------------------------------------------------------------- Stufenskala
 
 /**
- * Die 20 Widerstandsstufen als ansteigende Balken in den Farben der Intensitätsskala.
+ * Die Widerstandsstufen als ansteigende Balken in den Farben der Intensitätsskala.
  * Stufen bis [level] sind farbig, die übrigen neutral.
  */
 @Composable
-fun LevelScale(level: Int, height: Dp, modifier: Modifier = Modifier) {
+fun LevelScale(level: Int, config: LevelConfig, height: Dp, modifier: Modifier = Modifier) {
     val idle = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
     Canvas(modifier.fillMaxWidth().height(height)) {
-        val gap = 4.dp.toPx()
-        val w = (size.width - gap * (MAX_LEVEL - 1)) / MAX_LEVEL
-        for (i in 1..MAX_LEVEL) {
-            val h = size.height * (0.30f + 0.70f * i / MAX_LEVEL)
+        val n = config.levels
+        val gap = (if (n > 24) 2 else 4).dp.toPx()
+        val w = (size.width - gap * (n - 1)) / n
+        for (i in 1..n) {
+            val h = size.height * (0.30f + 0.70f * i / n)
             drawRect(
-                color = if (i <= level) intensityColor(LEVEL_WATTS[i]) else idle,
+                color = if (i <= level) intensityColor(config.watts(i)) else idle,
                 topLeft = Offset((i - 1) * (w + gap), size.height - h),
                 size = Size(w, h),
             )
         }
+    }
+}
+
+// ---------------------------------------------------------------- Fenstergröße
+
+/**
+ * Fenstergröße in dp. Handy hochkant bleibt einspaltig; Querformat und Tablets nutzen die
+ * Breite mit mehreren Spalten bzw. zwei Bereichen nebeneinander.
+ */
+data class Win(val w: Int, val h: Int) {
+    /** Breiter als hoch: zwei Bereiche nebeneinander. */
+    val landscape: Boolean get() = w > h
+
+    /** Tablet: auch die kurze Seite ist groß – größere Zahlen und Bedienelemente. */
+    val tablet: Boolean get() = minOf(w, h) >= 600
+
+    /** Wenig Höhe (Handy quer): Kopfzeile einzeilig, dichter gesetzt. */
+    val short: Boolean get() = h < 480
+
+    /** Spaltenzahl für Kartenlisten. */
+    val columns: Int
+        get() = when {
+            w >= 1100 -> 3
+            w >= 600 -> 2
+            else -> 1
+        }
+
+    /** Seitenrand. */
+    val gutter: Dp get() = if (tablet) 24.dp else 16.dp
+}
+
+@Composable
+fun win(): Win {
+    val c = LocalConfiguration.current
+    return Win(c.screenWidthDp, c.screenHeightDp)
+}
+
+/**
+ * Karten in [columns] Spalten. Bei einer Spalte entstehen die Karten direkt untereinander in
+ * der umgebenden Spalte (wie bisher auf dem Handy).
+ */
+@Composable
+fun <T> CardGrid(
+    items: List<T>,
+    columns: Int,
+    content: @Composable (item: T, modifier: Modifier) -> Unit,
+) {
+    if (columns <= 1) {
+        items.forEach { content(it, Modifier.fillMaxWidth()) }
+    } else {
+        items.chunked(columns).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                row.forEach { content(it, Modifier.weight(1f)) }
+                repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+    }
+}
+
+/**
+ * Aktionsleiste am unteren Rand. Auf breiten Fenstern rechtsbündig mit begrenzter Breite,
+ * damit Buttons nicht über den ganzen Bildschirm laufen.
+ */
+@Composable
+fun BottomBar(content: @Composable RowScope.() -> Unit) {
+    val w = win()
+    Box(
+        Modifier.fillMaxWidth().padding(horizontal = w.gutter, vertical = if (w.short) 8.dp else 16.dp),
+        contentAlignment = Alignment.CenterEnd,
+    ) {
+        Row(
+            if (w.w >= 600) Modifier.width(480.dp) else Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            content = content,
+        )
     }
 }

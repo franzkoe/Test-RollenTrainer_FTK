@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -85,6 +86,7 @@ fun WorkoutListScreen(vm: Engine) {
     var deleteTarget by remember { mutableStateOf<Workout?>(null) }
 
     BackHandler { vm.back() }
+    val win = win()
 
     Column(Modifier.fillMaxSize()) {
         TopBar("Trainingsauswahl", conn, onBack = { vm.back() })
@@ -99,11 +101,12 @@ fun WorkoutListScreen(vm: Engine) {
             Modifier
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(horizontal = win.gutter, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            workouts.forEach { w ->
+            CardGrid(workouts, win.columns) { w, modifier ->
                 WorkoutCard(
+                    modifier = modifier,
                     w = w,
                     onStart = { vm.startWorkout(w) },
                     onEdit = { vm.editWorkout(w) },
@@ -112,11 +115,13 @@ fun WorkoutListScreen(vm: Engine) {
                 )
             }
         }
-        Button(
-            onClick = { vm.newWorkout() },
-            modifier = Modifier.fillMaxWidth().padding(16.dp).height(56.dp),
-        ) {
-            IconLabel(AppIcons.Plus, "Neues Training erstellen")
+        BottomBar {
+            Button(
+                onClick = { vm.newWorkout() },
+                modifier = Modifier.weight(1f).height(56.dp),
+            ) {
+                IconLabel(AppIcons.Plus, "Neues Training erstellen")
+            }
         }
     }
 
@@ -151,6 +156,7 @@ private fun summary(w: Workout): String {
 
 @Composable
 private fun WorkoutCard(
+    modifier: Modifier,
     w: Workout,
     onStart: () -> Unit,
     onEdit: () -> Unit,
@@ -158,8 +164,7 @@ private fun WorkoutCard(
     onDelete: () -> Unit,
 ) {
     Column(
-        Modifier
-            .fillMaxWidth()
+        modifier
             .card()
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -198,51 +203,49 @@ private fun WorkoutCard(
 fun WorkoutEditorScreen(vm: Engine) {
     val w by vm.editing.collectAsState()
     val conn by vm.connState.collectAsState()
+    val win = win()
 
     BackHandler { vm.back() }
 
-    Column(Modifier.fillMaxSize()) {
-        TopBar("Training bearbeiten", conn, onBack = { vm.back() })
+    val nameField: @Composable () -> Unit = {
+        OutlinedTextField(
+            value = w.name,
+            onValueChange = { vm.updateEditing(w.copy(name = it)) },
+            label = { Text("Name des Trainings") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+
+    // Live-Vorschau; [chart] bestimmt die Höhe des Profils
+    val preview: @Composable (Modifier, Modifier) -> Unit = { modifier, chart ->
         Column(
-            Modifier
-                .weight(1f)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier
+                .fillMaxWidth()
+                .card()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            OutlinedTextField(
-                value = w.name,
-                onValueChange = { vm.updateEditing(w.copy(name = it)) },
-                label = { Text("Name des Trainings") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-
-            // Live-Vorschau
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .card()
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        "Ablauf",
-                        fontSize = 14.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Text(
-                        "Gesamtdauer " + formatMs(w.totalSeconds()),
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium,
-                        style = Tnum,
-                    )
-                }
-                WorkoutChart(w.phases(), Modifier.fillMaxWidth().height(88.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Ablauf",
+                    fontSize = 14.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    "Gesamtdauer " + formatMs(w.totalSeconds()),
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium,
+                    style = Tnum,
+                )
             }
+            WorkoutChart(w.phases(), chart.fillMaxWidth())
+        }
+    }
 
+    val sections: List<@Composable () -> Unit> = listOf(
+        {
             PhaseEditor(
                 title = "Aufwärmen",
                 minutes = w.warmupMin,
@@ -251,6 +254,8 @@ fun WorkoutEditorScreen(vm: Engine) {
                 onMinutes = { vm.updateEditing(w.copy(warmupMin = it)) },
                 onWatts = { vm.updateEditing(w.copy(warmupW = it)) },
             )
+        },
+        {
             PhaseEditor(
                 title = "Intervall",
                 minutes = w.intervalMin,
@@ -259,6 +264,8 @@ fun WorkoutEditorScreen(vm: Engine) {
                 onMinutes = { vm.updateEditing(w.copy(intervalMin = it)) },
                 onWatts = { vm.updateEditing(w.copy(intervalW = it)) },
             )
+        },
+        {
             PhaseEditor(
                 title = "Pause zwischen Intervallen",
                 minutes = w.restMin,
@@ -267,7 +274,8 @@ fun WorkoutEditorScreen(vm: Engine) {
                 onMinutes = { vm.updateEditing(w.copy(restMin = it)) },
                 onWatts = { vm.updateEditing(w.copy(restW = it)) },
             )
-
+        },
+        {
             Section("Wiederholungen") {
                 Stepper(
                     label = "Anzahl",
@@ -276,7 +284,8 @@ fun WorkoutEditorScreen(vm: Engine) {
                     onPlus = { vm.updateEditing(w.copy(reps = (w.reps + 1).coerceAtMost(30))) },
                 )
             }
-
+        },
+        {
             val cooldownOn = w.cooldownMin > 0
             Column(
                 Modifier
@@ -309,19 +318,67 @@ fun WorkoutEditorScreen(vm: Engine) {
                     )
                 }
             }
-        }
-        Row(
-            Modifier.fillMaxWidth().padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            FilledTonalButton(
-                onClick = { vm.saveEditing() },
-                modifier = Modifier.weight(1f).height(56.dp),
-            ) { Text("Speichern", fontSize = 18.sp, fontWeight = FontWeight.Medium) }
-            Button(
-                onClick = { vm.startEditing() },
-                modifier = Modifier.weight(1f).height(56.dp),
-            ) { IconLabel(AppIcons.Play, "Start") }
+        },
+    )
+
+    val buttons: @Composable RowScope.() -> Unit = {
+        FilledTonalButton(
+            onClick = { vm.saveEditing() },
+            modifier = Modifier.weight(1f).height(56.dp),
+        ) { Text("Speichern", fontSize = 18.sp, fontWeight = FontWeight.Medium) }
+        Button(
+            onClick = { vm.startEditing() },
+            modifier = Modifier.weight(1f).height(56.dp),
+        ) { IconLabel(AppIcons.Play, "Start") }
+    }
+
+    Column(Modifier.fillMaxSize()) {
+        TopBar("Training bearbeiten", conn, onBack = { vm.back() })
+        if (win.landscape) {
+            // Quer: links Name, Profil und Aktionen dauerhaft sichtbar, rechts die Einstellungen
+            Row(
+                Modifier.fillMaxSize().padding(horizontal = win.gutter).padding(bottom = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(if (win.tablet) 24.dp else 12.dp),
+            ) {
+                Column(
+                    Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    nameField()
+                    preview(Modifier.weight(1f), Modifier.weight(1f))
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), content = buttons)
+                }
+                Column(
+                    Modifier.weight(if (win.tablet) 1.2f else 1f).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    sections.forEach { it() }
+                    Spacer(Modifier.height(8.dp))
+                }
+            }
+        } else {
+            Column(
+                Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = win.gutter, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                nameField()
+                preview(Modifier, Modifier.height(if (win.tablet) 160.dp else 88.dp))
+                if (win.columns > 1) {
+                    // Tablet hochkant: Einstellungen in zwei Spalten
+                    sections.chunked(2).forEach { row ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            row.forEach { section -> Box(Modifier.weight(1f)) { section() } }
+                            if (row.size < 2) Spacer(Modifier.weight(1f))
+                        }
+                    }
+                } else {
+                    sections.forEach { it() }
+                }
+            }
+            BottomBar(content = buttons)
         }
     }
 }
@@ -383,7 +440,7 @@ private fun PhaseFields(
 }
 
 @Composable
-private fun Stepper(
+fun Stepper(
     label: String,
     valueText: String,
     onMinus: () -> Unit,
@@ -438,8 +495,7 @@ fun WorkoutRunScreen(vm: Engine) {
     // Zurück-Taste verhält sich wie „Beenden“ (mit Bestätigung)
     BackHandler { if (!run.finished) askEnd = true }
 
-    val landscape =
-        LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val w = win()
 
     Column(Modifier.fillMaxSize()) {
         TopBar(run.workoutName, conn, onBack = { if (!run.finished) askEnd = true })
@@ -463,24 +519,30 @@ fun WorkoutRunScreen(vm: Engine) {
 
             run.phases.isNotEmpty() -> {
                 val metrics = buildMetrics(data, heartRate, live.distanceM, live.kcal)
-                if (landscape) {
+                val big = w.tablet
+                if (w.landscape) {
+                    // Quer: links Phase und Bedienung, rechts Ablauf und Live-Werte
                     Row(
-                        Modifier.fillMaxSize().padding(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        Modifier.fillMaxSize().padding(horizontal = w.gutter).padding(bottom = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(if (big) 24.dp else 16.dp),
                     ) {
                         Column(
                             Modifier.weight(1f).verticalScroll(rememberScrollState()),
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
-                            PhasePanel(run)
+                            PhasePanel(run, big)
+                            RunButtons(run, big, onPause = { vm.togglePause() }, onEnd = { askEnd = true })
                         }
                         Column(
                             Modifier.weight(1f).verticalScroll(rememberScrollState()),
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
-                            ProgressPanel(run)
-                            MetricGrid(metrics, columns = 3, compact = true)
-                            RunButtons(run, onPause = { vm.togglePause() }, onEnd = { askEnd = true })
+                            ProgressPanel(run, chartHeight = if (big) 120.dp else 56.dp)
+                            if (big) {
+                                MetricGrid(metrics, columns = 2, compact = false, large = true)
+                            } else {
+                                MetricGrid(metrics, columns = 3, compact = true)
+                            }
                         }
                     }
                 } else {
@@ -488,14 +550,18 @@ fun WorkoutRunScreen(vm: Engine) {
                         Modifier
                             .fillMaxSize()
                             .verticalScroll(rememberScrollState())
-                            .padding(horizontal = 16.dp)
+                            .padding(horizontal = w.gutter)
                             .padding(bottom = 16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        PhasePanel(run)
-                        ProgressPanel(run)
-                        MetricGrid(metrics, columns = 3, compact = true)
-                        RunButtons(run, onPause = { vm.togglePause() }, onEnd = { askEnd = true })
+                        PhasePanel(run, big)
+                        ProgressPanel(run, chartHeight = if (big) 120.dp else 56.dp)
+                        if (big) {
+                            MetricGrid(metrics, columns = 3, compact = false, large = true)
+                        } else {
+                            MetricGrid(metrics, columns = 3, compact = true)
+                        }
+                        RunButtons(run, big, onPause = { vm.togglePause() }, onEnd = { askEnd = true })
                     }
                 }
             }
@@ -528,7 +594,7 @@ fun WorkoutRunScreen(vm: Engine) {
 
 /** Aktuelle Phase, Zielwatt und Restzeit der Phase – groß und farblich gekennzeichnet. */
 @Composable
-private fun PhasePanel(run: RunUi) {
+private fun PhasePanel(run: RunUi, big: Boolean = false) {
     val phase = run.phases[run.phaseIndex.coerceIn(0, run.phases.size - 1)]
     val shownWatts = if (run.paused) 0 else phase.watts
     val color by animateColorAsState(
@@ -553,8 +619,8 @@ private fun PhasePanel(run: RunUi) {
         ) { label ->
             Text(
                 label,
-                fontSize = 24.sp,
-                lineHeight = 30.sp,
+                fontSize = if (big) 36.sp else 24.sp,
+                lineHeight = if (big) 44.sp else 30.sp,
                 fontWeight = FontWeight.Medium,
                 textAlign = TextAlign.Center,
             )
@@ -571,7 +637,11 @@ private fun PhasePanel(run: RunUi) {
                 )
                 Text(
                     if (phase.watts == 0) "Leerlauf" else "${phase.watts} W",
-                    fontSize = if (phase.watts == 0) 32.sp else 44.sp,
+                    fontSize = if (big) {
+                        if (phase.watts == 0) 56.sp else 88.sp
+                    } else {
+                        if (phase.watts == 0) 32.sp else 44.sp
+                    },
                     fontWeight = FontWeight.SemiBold,
                     style = Tnum,
                 )
@@ -584,7 +654,7 @@ private fun PhasePanel(run: RunUi) {
                 )
                 Text(
                     formatMs(run.phaseRemainingSec),
-                    fontSize = 44.sp,
+                    fontSize = if (big) 88.sp else 44.sp,
                     fontWeight = FontWeight.SemiBold,
                     style = Tnum,
                 )
@@ -596,7 +666,7 @@ private fun PhasePanel(run: RunUi) {
 
 /** Gesamt-Restzeit, Fortschritt über den gesamten Ablauf, Vorschau auf die nächste Phase. */
 @Composable
-private fun ProgressPanel(run: RunUi) {
+private fun ProgressPanel(run: RunUi, chartHeight: androidx.compose.ui.unit.Dp = 56.dp) {
     val fraction = if (run.totalSec > 0) run.elapsedSec.toFloat() / run.totalSec else 0f
     val animated by animateFloatAsState(fraction, label = "progress")
     val next = run.phases.getOrNull(run.phaseIndex + 1)
@@ -622,7 +692,7 @@ private fun ProgressPanel(run: RunUi) {
                 style = Tnum,
             )
         }
-        WorkoutChart(run.phases, Modifier.fillMaxWidth().height(56.dp), progress = animated)
+        WorkoutChart(run.phases, Modifier.fillMaxWidth().height(chartHeight), progress = animated)
         LinearProgressIndicator(
             progress = { animated },
             modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
@@ -653,14 +723,15 @@ private fun ProgressPanel(run: RunUi) {
 }
 
 @Composable
-private fun RunButtons(run: RunUi, onPause: () -> Unit, onEnd: () -> Unit) {
+private fun RunButtons(run: RunUi, big: Boolean, onPause: () -> Unit, onEnd: () -> Unit) {
+    val height = if (big) 80.dp else 64.dp
     Row(
         Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Button(
             onClick = onPause,
-            modifier = Modifier.weight(1f).height(64.dp),
+            modifier = Modifier.weight(1f).height(height),
         ) {
             if (run.paused) {
                 IconLabel(AppIcons.Play, "Weiter", fontSize = 20, iconSize = 24)
@@ -670,7 +741,7 @@ private fun RunButtons(run: RunUi, onPause: () -> Unit, onEnd: () -> Unit) {
         }
         OutlinedButton(
             onClick = onEnd,
-            modifier = Modifier.weight(1f).height(64.dp),
+            modifier = Modifier.weight(1f).height(height),
         ) {
             Text(
                 "Beenden",

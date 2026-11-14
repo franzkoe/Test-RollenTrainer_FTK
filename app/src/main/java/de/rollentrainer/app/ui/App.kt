@@ -57,7 +57,8 @@ import de.rollentrainer.app.Engine
 import de.rollentrainer.app.Screen
 import de.rollentrainer.app.ble.ConnState
 import de.rollentrainer.app.data.ExportFormat
-import de.rollentrainer.app.data.MAX_LEVEL
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import de.rollentrainer.app.data.Workout
 import java.util.Locale
 
@@ -79,6 +80,7 @@ fun App(
                     when (s) {
                         Screen.HOME -> HomeScreen(vm, requestPermissions, enableBluetooth)
                         Screen.DEVICES -> DevicesScreen(vm, requestPermissions, enableBluetooth)
+                        Screen.SETTINGS -> LevelSettingsScreen(vm)
                         Screen.FREE_RIDE -> FreeRideScreen(vm)
                         Screen.WORKOUTS -> WorkoutListScreen(vm)
                         Screen.EDITOR -> WorkoutEditorScreen(vm)
@@ -209,82 +211,155 @@ fun HomeScreen(vm: Engine, requestPermissions: () -> Unit, enableBluetooth: () -
     val firstWorkout = workouts.firstOrNull()
     val lastRide = rides.firstOrNull()
 
+    val config by vm.levelConfig.collectAsState()
+    val w = win()
+    // Höhe des „Moments“ in den großen Kacheln
+    val moment = if (w.tablet) 64.dp else 32.dp
+
+    val devicesRow: @Composable () -> Unit = {
+        MenuRow(
+            icon = AppIcons.Bluetooth,
+            title = "Geräte",
+            subtitle = when (conn) {
+                ConnState.READY -> (trainerName ?: "Trainer") + " verbunden"
+                ConnState.CONNECTING -> "Verbindung zu " + (trainerName ?: "Trainer") + " wird aufgebaut"
+                ConnState.DISCONNECTED ->
+                    if (devices.isEmpty()) "Trainer suchen und verbinden" else "Kein Trainer verbunden"
+            },
+            onClick = { vm.open(Screen.DEVICES) },
+        )
+    }
+    val freeRideTile: @Composable (Modifier) -> Unit = { modifier ->
+        MenuTile(
+            icon = AppIcons.Bike,
+            title = "Freie Fahrt",
+            subtitle = "Widerstand in ${config.levels + 1} Stufen, von Leerlauf bis " +
+                "${config.watts(config.levels)} W",
+            modifier = modifier,
+            dense = w.short,
+            onClick = { vm.openFreeRide() },
+        ) {
+            LevelScale(level = config.levels, config = config, height = moment)
+        }
+    }
+    val workoutTile: @Composable (Modifier) -> Unit = { modifier ->
+        MenuTile(
+            icon = AppIcons.Timer,
+            title = "Trainingsauswahl",
+            subtitle = if (firstWorkout == null) {
+                "Intervalltraining anlegen und fahren"
+            } else if (workouts.size == 1) {
+                firstWorkout.name + " · " + formatMs(firstWorkout.totalSeconds())
+            } else {
+                "${workouts.size} Trainings, zuerst " + firstWorkout.name
+            },
+            modifier = modifier,
+            dense = w.short,
+            onClick = { vm.open(Screen.WORKOUTS) },
+        ) {
+            // Ohne gespeichertes Training: das Profil, mit dem ein neues Training beginnt
+            val preview = firstWorkout ?: Workout(id = "", name = "")
+            WorkoutChart(preview.phases(), Modifier.fillMaxWidth().height(moment))
+        }
+    }
+    val historyRow: @Composable () -> Unit = {
+        MenuRow(
+            icon = AppIcons.Chart,
+            title = "Verlauf",
+            subtitle = if (lastRide == null) {
+                "Noch keine Fahrt gespeichert"
+            } else {
+                "Zuletzt " + formatMs(lastRide.durationSec) + " · " +
+                    String.format(Locale.GERMANY, "%.1f", lastRide.distanceM / 1000.0) + " km" +
+                    (lastRide.avgPower?.let { " · Ø $it W" } ?: "")
+            },
+            onClick = { vm.openHistory() },
+        )
+    }
+    val settingsRow: @Composable () -> Unit = {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextButton(onClick = { vm.toggleTheme() }) {
+                Text(
+                    if (light) "Design: hell" else "Design: dunkel",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            TextButton(onClick = { vm.toggleKeepScreenOn() }) {
+                Text(
+                    if (screenOn) "Bildschirm bleibt an" else "Bildschirm darf ausgehen",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            TextButton(onClick = { vm.open(Screen.SETTINGS) }) {
+                Icon(
+                    AppIcons.Sliders,
+                    contentDescription = "Stufen der Freien Fahrt einstellen",
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (w.w >= 600) {
+                    Spacer(Modifier.width(8.dp))
+                    Text("Stufen", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+    }
+
     Column(Modifier.fillMaxSize()) {
         TopBar("Rollentrainer", conn)
-        Column(
-            Modifier.fillMaxSize().padding(horizontal = 16.dp).padding(bottom = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            EnvironmentBanners(vm, requestPermissions, enableBluetooth)
-            MenuRow(
-                icon = AppIcons.Bluetooth,
-                title = "Geräte",
-                subtitle = when (conn) {
-                    ConnState.READY -> (trainerName ?: "Trainer") + " verbunden"
-                    ConnState.CONNECTING -> "Verbindung zu " + (trainerName ?: "Trainer") + " wird aufgebaut"
-                    ConnState.DISCONNECTED ->
-                        if (devices.isEmpty()) "Trainer suchen und verbinden" else "Kein Trainer verbunden"
-                },
-                onClick = { vm.open(Screen.DEVICES) },
-            )
-            MenuTile(
-                icon = AppIcons.Bike,
-                title = "Freie Fahrt",
-                subtitle = "Widerstand in 21 Stufen, von Leerlauf bis 550 W",
-                modifier = Modifier.weight(1f),
-                onClick = { vm.openFreeRide() },
+        if (w.landscape) {
+            // Quer: links Stand und Einstellungen, rechts die beiden Wege aufs Rad
+            Row(
+                Modifier.fillMaxSize().padding(horizontal = w.gutter).padding(bottom = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(if (w.tablet) 24.dp else 12.dp),
             ) {
-                LevelScale(level = MAX_LEVEL, height = 32.dp)
+                Column(Modifier.weight(1f)) {
+                    Column(
+                        Modifier.weight(1f).verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        EnvironmentBanners(vm, requestPermissions, enableBluetooth)
+                        devicesRow()
+                        historyRow()
+                    }
+                    settingsRow()
+                }
+                Column(
+                    Modifier.weight(if (w.tablet) 1.4f else 1f),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    freeRideTile(Modifier.weight(1f))
+                    workoutTile(Modifier.weight(1f))
+                }
             }
-            MenuTile(
-                icon = AppIcons.Timer,
-                title = "Trainingsauswahl",
-                subtitle = if (firstWorkout == null) {
-                    "Intervalltraining anlegen und fahren"
-                } else if (workouts.size == 1) {
-                    firstWorkout.name + " · " + formatMs(firstWorkout.totalSeconds())
-                } else {
-                    "${workouts.size} Trainings, zuerst " + firstWorkout.name
-                },
-                modifier = Modifier.weight(1f),
-                onClick = { vm.open(Screen.WORKOUTS) },
+        } else {
+            Column(
+                Modifier.fillMaxSize().padding(horizontal = w.gutter).padding(bottom = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                // Ohne gespeichertes Training: das Profil, mit dem ein neues Training beginnt
-                val preview = firstWorkout ?: Workout(id = "", name = "")
-                WorkoutChart(preview.phases(), Modifier.fillMaxWidth().height(32.dp))
-            }
-            MenuRow(
-                icon = AppIcons.Chart,
-                title = "Verlauf",
-                subtitle = if (lastRide == null) {
-                    "Noch keine Fahrt gespeichert"
-                } else {
-                    "Zuletzt " + formatMs(lastRide.durationSec) + " · " +
-                        String.format(Locale.GERMANY, "%.1f", lastRide.distanceM / 1000.0) + " km" +
-                        (lastRide.avgPower?.let { " · Ø $it W" } ?: "")
-                },
-                onClick = { vm.openHistory() },
-            )
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                TextButton(onClick = { vm.toggleTheme() }) {
-                    Text(
-                        if (light) "Design: hell" else "Design: dunkel",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                TextButton(onClick = { vm.toggleKeepScreenOn() }) {
-                    Text(
-                        if (screenOn) "Bildschirm bleibt an" else "Bildschirm darf ausgehen",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                EnvironmentBanners(vm, requestPermissions, enableBluetooth)
+                devicesRow()
+                freeRideTile(Modifier.weight(1f))
+                workoutTile(Modifier.weight(1f))
+                historyRow()
+                settingsRow()
             }
         }
     }
 }
 
 @Composable
-private fun MenuHeader(icon: ImageVector, title: String, subtitle: String, titleSize: Int) {
+private fun MenuHeader(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    titleSize: Int,
+    oneLine: Boolean = false,
+) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(
             icon,
@@ -300,7 +375,7 @@ private fun MenuHeader(icon: ImageVector, title: String, subtitle: String, title
                 fontSize = 14.sp,
                 lineHeight = 20.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
+                maxLines = if (oneLine) 1 else 2,
                 overflow = TextOverflow.Ellipsis,
             )
         }
@@ -337,6 +412,7 @@ private fun MenuTile(
     title: String,
     subtitle: String,
     modifier: Modifier = Modifier,
+    dense: Boolean = false,
     onClick: () -> Unit,
     moment: @Composable () -> Unit,
 ) {
@@ -345,10 +421,10 @@ private fun MenuTile(
             .fillMaxWidth()
             .card()
             .clickable(onClick = onClick)
-            .padding(20.dp),
+            .padding(if (dense) 16.dp else 20.dp),
         verticalArrangement = Arrangement.SpaceBetween,
     ) {
-        MenuHeader(icon, title, subtitle, titleSize = 24)
+        MenuHeader(icon, title, subtitle, titleSize = if (dense) 20 else 24, oneLine = dense)
         moment()
     }
 }

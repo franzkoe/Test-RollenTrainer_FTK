@@ -62,13 +62,26 @@ data class Workout(
     fun totalSeconds(): Int = phases().sumOf { it.seconds }
 }
 
-/** Freie Fahrt: 21 Stufen (0–20), linear, auf 5 W gerundet. */
-val LEVEL_WATTS = intArrayOf(
-    0, 30, 55, 85, 110, 140, 165, 195, 220, 250, 275,
-    305, 330, 360, 385, 415, 440, 470, 495, 525, 550,
-)
+/**
+ * Stufen der Freien Fahrt: Stufe 0 ist Leerlauf, die Stufen 1 bis [levels] steigen linear bis
+ * [maxWatts] und werden auf 5 W gerundet. Standard: 20 Stufen bis 550 W.
+ */
+data class LevelConfig(val levels: Int = 20, val maxWatts: Int = 550) {
+    fun watts(level: Int): Int {
+        if (level <= 0) return 0
+        val exact = level.coerceAtMost(levels) * maxWatts.toDouble() / levels
+        return Math.floor(exact / 5.0 + 0.5).toInt() * 5
+    }
 
-const val MAX_LEVEL = 20
+    companion object {
+        const val MIN_LEVELS = 5
+        const val MAX_LEVELS = 40
+        const val MIN_WATTS = 100
+        const val MAX_WATTS = 1500
+        const val WATT_STEP = 10
+    }
+}
+
 const val MAX_WATTS = 600
 
 // ---------------------------------------------------------------- Aufzeichnung

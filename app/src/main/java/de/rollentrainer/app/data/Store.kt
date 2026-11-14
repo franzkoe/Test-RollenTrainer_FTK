@@ -44,6 +44,8 @@ class Store(private val context: Context) {
     private val keyLightTheme = booleanPreferencesKey("light_theme")
     private val keyLastHr = stringPreferencesKey("last_hr")
     private val keyScreenOn = booleanPreferencesKey("keep_screen_on")
+    private val keyLevels = stringPreferencesKey("free_ride_levels")
+    private val keyMaxWatts = stringPreferencesKey("free_ride_max_watts")
 
     val devices: Flow<List<SavedDevice>> =
         context.dataStore.data.map { parseDevices(it[keyDevices]) }
@@ -65,6 +67,23 @@ class Store(private val context: Context) {
     suspend fun setLastHr(address: String?) {
         context.dataStore.edit {
             if (address == null) it.remove(keyLastHr) else it[keyLastHr] = address
+        }
+    }
+
+    /** Stufenzahl und Maximalleistung der Freien Fahrt. */
+    val levelConfig: Flow<LevelConfig> = context.dataStore.data.map {
+        LevelConfig(
+            levels = (it[keyLevels]?.toIntOrNull() ?: 20)
+                .coerceIn(LevelConfig.MIN_LEVELS, LevelConfig.MAX_LEVELS),
+            maxWatts = (it[keyMaxWatts]?.toIntOrNull() ?: 550)
+                .coerceIn(LevelConfig.MIN_WATTS, LevelConfig.MAX_WATTS),
+        )
+    }
+
+    suspend fun setLevelConfig(c: LevelConfig) {
+        context.dataStore.edit {
+            it[keyLevels] = c.levels.toString()
+            it[keyMaxWatts] = c.maxWatts.toString()
         }
     }
 

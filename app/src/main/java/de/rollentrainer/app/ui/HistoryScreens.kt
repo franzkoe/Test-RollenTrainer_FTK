@@ -125,6 +125,7 @@ fun LineChart(
     durationSec: Int,
     decimals: Boolean = false,
     main: Boolean = false,
+    tall: Boolean = false,
 ) {
     // Eine Hauptkurve im Akzent, die übrigen kleiner und neutral
     val color = if (main) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
@@ -152,7 +153,12 @@ fun LineChart(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        Canvas(Modifier.fillMaxWidth().height(if (main) 160.dp else 72.dp)) {
+        val chartHeight = if (tall) {
+            if (main) 260.dp else 120.dp
+        } else {
+            if (main) 160.dp else 72.dp
+        }
+        Canvas(Modifier.fillMaxWidth().height(chartHeight)) {
             val top = 4.dp.toPx()
             val h = size.height - top
             // Hilfslinien: Maximum, Mitte, Null
@@ -189,24 +195,80 @@ fun LineChart(
 
 /** Kurven für Leistung, Geschwindigkeit, Puls und Kadenz (jeweils nur, wenn Daten vorliegen). */
 @Composable
-fun RideCharts(s: RideSummary, samples: List<Sample>) {
+fun RideCharts(s: RideSummary, samples: List<Sample>, tall: Boolean = false) {
     if (samples.isEmpty()) return
     LineChart(
         "Leistung", "W", samples.map { it.powerW?.toFloat() },
-        s.durationSec, main = true,
+        s.durationSec, main = true, tall = tall,
     )
     LineChart(
         "Geschwindigkeit", "km/h", samples.map { it.speedKmh?.toFloat() },
-        s.durationSec, decimals = true,
+        s.durationSec, decimals = true, tall = tall,
     )
     LineChart(
         "Puls", "bpm", samples.map { it.heartRate?.takeIf { v -> v > 0 }?.toFloat() },
-        s.durationSec,
+        s.durationSec, tall = tall,
     )
     LineChart(
         "Kadenz", "rpm", samples.map { it.cadenceRpm?.toFloat() },
-        s.durationSec,
+        s.durationSec, tall = tall,
     )
+}
+
+/**
+ * Kennzahlen und Kurven einer Fahrt. Handy hochkant: untereinander. Quer: Kennzahlen links,
+ * Kurven rechts. Tablet hochkant: Kennzahlen vierspaltig über den Kurven.
+ */
+@Composable
+fun RidePanes(
+    w: Win,
+    modifier: Modifier,
+    head: @Composable () -> Unit,
+    summary: RideSummary,
+    samples: List<Sample>,
+    tail: @Composable () -> Unit = {},
+) {
+    val metrics = summaryMetrics(summary)
+    if (w.landscape) {
+        Row(
+            modifier.padding(horizontal = w.gutter),
+            horizontalArrangement = Arrangement.spacedBy(if (w.tablet) 24.dp else 12.dp),
+        ) {
+            Column(
+                Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                head()
+                MetricGrid(metrics, columns = 2, compact = !w.tablet)
+                tail()
+            }
+            Column(
+                Modifier
+                    .weight(if (w.tablet) 1.5f else 1f)
+                    .verticalScroll(rememberScrollState())
+                    .padding(vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                RideCharts(summary, samples, tall = w.tablet)
+            }
+        }
+    } else {
+        Column(
+            modifier
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = w.gutter, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            head()
+            if (w.tablet) {
+                MetricGrid(metrics, columns = 4, compact = false)
+            } else {
+                MetricGrid(metrics, columns = 2, compact = true)
+            }
+            RideCharts(summary, samples, tall = w.tablet)
+            tail()
+        }
+    }
 }
 
 // ================================================================ Zusammenfassung nach der Fahrt
@@ -221,32 +283,29 @@ fun SummaryScreen(vm: Engine) {
     BackHandler { askDiscard = true }
 
     val p = pending
+    val w = win()
     Column(Modifier.fillMaxSize()) {
         TopBar("Einheit beendet", conn)
         if (p != null) {
-            Column(
-                Modifier
-                    .weight(1f)
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
+            val head: @Composable () -> Unit = {
                 Text(p.summary.name, fontSize = 22.sp, fontWeight = FontWeight.Medium)
                 Text(
                     "Möchtest du diese Fahrt speichern?",
                     fontSize = 16.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                MetricGrid(summaryMetrics(p.summary), columns = 2, compact = true)
-                RideCharts(p.summary, p.samples)
             }
+            RidePanes(
+                w = w,
+                modifier = Modifier.weight(1f),
+                head = head,
+                summary = p.summary,
+                samples = p.samples,
+            )
         } else {
             Spacer(Modifier.weight(1f))
         }
-        Row(
-            Modifier.fillMaxWidth().padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
+        BottomBar {
             OutlinedButton(
                 onClick = { askDiscard = true },
                 modifier = Modifier.weight(1f).height(56.dp),
@@ -297,6 +356,7 @@ fun HistoryScreen(vm: Engine) {
     val conn by vm.connState.collectAsState()
 
     BackHandler { vm.back() }
+    val w = win()
 
     Column(Modifier.fillMaxSize()) {
         TopBar("Verlauf", conn, onBack = { vm.back() })
@@ -311,13 +371,12 @@ fun HistoryScreen(vm: Engine) {
             Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(horizontal = w.gutter, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            rides.forEach { r ->
+            CardGrid(rides, w.columns) { r, modifier ->
                 Row(
-                    Modifier
-                        .fillMaxWidth()
+                    modifier
                         .card()
                         .clickable { vm.openRide(r) }
                         .padding(16.dp),
@@ -376,24 +435,19 @@ fun RideDetailScreen(
     BackHandler { vm.back() }
 
     val d = detail
+    val w = win()
     Column(Modifier.fillMaxSize()) {
         TopBar(d?.summary?.name ?: "Fahrt", conn, onBack = { vm.back() })
         if (d != null) {
-            Column(
-                Modifier
-                    .weight(1f)
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
+            val head: @Composable () -> Unit = {
                 Text(
                     formatDate(d.summary.startMs),
                     fontSize = 14.sp,
                     style = Tnum,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                MetricGrid(summaryMetrics(d.summary), columns = 2, compact = true)
-                RideCharts(d.summary, d.samples)
+            }
+            val manage: @Composable () -> Unit = {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     TextButton(onClick = { showRename = true }) {
                         Text("Umbenennen", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -403,12 +457,22 @@ fun RideDetailScreen(
                     }
                 }
             }
-            Button(
-                onClick = { showExport = true },
-                enabled = d.samples.isNotEmpty(),
-                modifier = Modifier.fillMaxWidth().padding(16.dp).height(56.dp),
-            ) {
-                Text("Exportieren", fontSize = 18.sp, fontWeight = FontWeight.Medium)
+            RidePanes(
+                w = w,
+                modifier = Modifier.weight(1f),
+                head = head,
+                summary = d.summary,
+                samples = d.samples,
+                tail = manage,
+            )
+            BottomBar {
+                Button(
+                    onClick = { showExport = true },
+                    enabled = d.samples.isNotEmpty(),
+                    modifier = Modifier.weight(1f).height(56.dp),
+                ) {
+                    Text("Exportieren", fontSize = 18.sp, fontWeight = FontWeight.Medium)
+                }
             }
         }
     }

@@ -67,8 +67,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import de.rollentrainer.app.Engine
-import de.rollentrainer.app.data.LEVEL_WATTS
-import de.rollentrainer.app.data.MAX_LEVEL
+import de.rollentrainer.app.data.LevelConfig
 
 @Composable
 fun FreeRideScreen(vm: Engine) {
@@ -84,8 +83,8 @@ fun FreeRideScreen(vm: Engine) {
     // Auch die System-Zurück-Geste löst den Dialog aus
     BackHandler { askEnd = true }
 
-    val landscape =
-        LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val w = win()
+    val config by vm.levelConfig.collectAsState()
 
     Column(Modifier.fillMaxSize()) {
         TopBar("Freie Fahrt", conn, onBack = { askEnd = true })
@@ -95,23 +94,28 @@ fun FreeRideScreen(vm: Engine) {
             BigCountdown(countdown)
         } else {
             val metrics = buildMetrics(data, heartRate, live.distanceM, live.kcal)
-            if (landscape) {
+            if (w.landscape) {
+                // Quer: Werte links, Steuerung rechts
                 Row(
-                    Modifier.fillMaxSize().padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    Modifier.fillMaxSize().padding(horizontal = w.gutter).padding(bottom = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(if (w.tablet) 24.dp else 16.dp),
                 ) {
                     Column(
                         Modifier.weight(1f).verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        ElapsedTime(ride.elapsedSec, small = true)
-                        MetricGrid(metrics, columns = 3, compact = true)
+                        ElapsedTime(ride.elapsedSec, size = if (w.tablet) 96 else 48)
+                        if (w.tablet) {
+                            MetricGrid(metrics, columns = 2, compact = false, large = true)
+                        } else {
+                            MetricGrid(metrics, columns = 3, compact = true)
+                        }
                     }
                     Column(
                         Modifier.weight(1f).verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        LevelControl(ride.level, onChange = { vm.changeLevel(it) })
+                        LevelControl(ride.level, config, big = w.tablet, onChange = { vm.changeLevel(it) })
                     }
                 }
             } else {
@@ -119,13 +123,17 @@ fun FreeRideScreen(vm: Engine) {
                     Modifier
                         .fillMaxSize()
                         .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 16.dp)
+                        .padding(horizontal = w.gutter)
                         .padding(bottom = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
-                    ElapsedTime(ride.elapsedSec, small = false)
-                    MetricGrid(metrics, columns = 2, compact = false)
-                    LevelControl(ride.level, onChange = { vm.changeLevel(it) })
+                    ElapsedTime(ride.elapsedSec, size = if (w.tablet) 112 else 64)
+                    if (w.tablet) {
+                        MetricGrid(metrics, columns = 3, compact = false, large = true)
+                    } else {
+                        MetricGrid(metrics, columns = 2, compact = false)
+                    }
+                    LevelControl(ride.level, config, big = w.tablet, onChange = { vm.changeLevel(it) })
                 }
             }
         }
@@ -155,10 +163,10 @@ fun FreeRideScreen(vm: Engine) {
 }
 
 @Composable
-private fun ElapsedTime(seconds: Int, small: Boolean) {
+private fun ElapsedTime(seconds: Int, size: Int) {
     Text(
         formatHms(seconds),
-        fontSize = if (small) 48.sp else 64.sp,
+        fontSize = size.sp,
         fontWeight = FontWeight.Medium,
         style = Tnum,
         modifier = Modifier.fillMaxWidth(),
@@ -168,16 +176,18 @@ private fun ElapsedTime(seconds: Int, small: Boolean) {
 
 /** Widerstandssteuerung: große „–“/„+“-Tasten, Stufe und Watt, Stufenleiste. */
 @Composable
-private fun LevelControl(level: Int, onChange: (Int) -> Unit) {
+private fun LevelControl(level: Int, config: LevelConfig, big: Boolean, onChange: (Int) -> Unit) {
     val haptic = LocalHapticFeedback.current
-    val watts = LEVEL_WATTS[level]
+    val watts = config.watts(level)
+    val button = if (big) 136.dp else 96.dp
+    val icon = if (big) 56.dp else 40.dp
 
     Column(
         Modifier
             .fillMaxWidth()
             .card()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+            .padding(if (big) 24.dp else 16.dp),
+        verticalArrangement = Arrangement.spacedBy(if (big) 24.dp else 16.dp),
     ) {
         Row(
             Modifier.fillMaxWidth(),
@@ -189,10 +199,10 @@ private fun LevelControl(level: Int, onChange: (Int) -> Unit) {
                     onChange(-1)
                 },
                 enabled = level > 0,
-                modifier = Modifier.size(96.dp),
+                modifier = Modifier.size(button),
                 shape = RoundedCornerShape(20.dp),
                 contentPadding = PaddingValues(0.dp),
-            ) { Icon(AppIcons.Minus, contentDescription = "Stufe runter", modifier = Modifier.size(40.dp)) }
+            ) { Icon(AppIcons.Minus, contentDescription = "Stufe runter", modifier = Modifier.size(icon)) }
 
             Column(
                 Modifier.weight(1f),
@@ -200,7 +210,7 @@ private fun LevelControl(level: Int, onChange: (Int) -> Unit) {
             ) {
                 Text(
                     "Stufe",
-                    fontSize = 14.sp,
+                    fontSize = if (big) 18.sp else 14.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 AnimatedContent(
@@ -221,7 +231,7 @@ private fun LevelControl(level: Int, onChange: (Int) -> Unit) {
                 ) { l ->
                     Text(
                         l.toString(),
-                        fontSize = 72.sp,
+                        fontSize = if (big) 128.sp else 72.sp,
                         fontWeight = FontWeight.SemiBold,
                         style = Tnum,
                     )
@@ -231,7 +241,7 @@ private fun LevelControl(level: Int, onChange: (Int) -> Unit) {
                     Spacer(Modifier.width(8.dp))
                     Text(
                         if (level == 0) "Leerlauf" else "$watts W",
-                        fontSize = 24.sp,
+                        fontSize = if (big) 36.sp else 24.sp,
                         fontWeight = FontWeight.Medium,
                         style = Tnum,
                     )
@@ -243,13 +253,13 @@ private fun LevelControl(level: Int, onChange: (Int) -> Unit) {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     onChange(1)
                 },
-                enabled = level < MAX_LEVEL,
-                modifier = Modifier.size(96.dp),
+                enabled = level < config.levels,
+                modifier = Modifier.size(button),
                 shape = RoundedCornerShape(20.dp),
                 contentPadding = PaddingValues(0.dp),
-            ) { Icon(AppIcons.Plus, contentDescription = "Stufe hoch", modifier = Modifier.size(40.dp)) }
+            ) { Icon(AppIcons.Plus, contentDescription = "Stufe hoch", modifier = Modifier.size(icon)) }
         }
 
-        LevelScale(level = level, height = 32.dp)
+        LevelScale(level = level, config = config, height = if (big) 56.dp else 32.dp)
     }
 }

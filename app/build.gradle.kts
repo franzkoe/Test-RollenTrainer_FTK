@@ -14,8 +14,8 @@ android {
         applicationId = "de.rollentrainer.app"
         minSdk = 31
         targetSdk = 36
-        versionCode = 3
-        versionName = "2.1"
+        versionCode = 4
+        versionName = "2.2"
     }
 
     // Fester Signaturschlüssel im Projekt, damit jede gebaute APK gleich signiert ist

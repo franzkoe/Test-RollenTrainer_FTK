@@ -48,6 +48,10 @@ private fun lineIcon(name: String, path: String): ImageVector =
 object AppIcons {
     val Back = lineIcon("back", "M19 12H5 M12 19l-7-7 7-7")
     val Chevron = lineIcon("chevron", "M9 18l6-6-6-6")
+    val Sliders = lineIcon(
+        "sliders",
+        "M4 6h9 M17 6h3 M15 4v4 M4 12h3 M11 12h9 M9 10v4 M4 18h11 M19 18h1 M17 16v4",
+    )
     val Plus = lineIcon("plus", "M12 5v14 M5 12h14")
     val Minus = lineIcon("minus", "M5 12h14")
     val Play = lineIcon("play", "M7 4.5v15l12-7.5z")
