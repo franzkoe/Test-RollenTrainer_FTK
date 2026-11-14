@@ -104,18 +104,28 @@ fun FreeRideScreen(vm: Engine) {
                         Modifier.weight(1f).verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        ElapsedTime(ride.elapsedSec, size = if (w.tablet) 96 else 48)
+                        ElapsedTime(ride.elapsedSec, size = if (w.tablet) 112 else 48)
                         if (w.tablet) {
                             MetricGrid(metrics, columns = 2, compact = false, large = true)
                         } else {
                             MetricGrid(metrics, columns = 3, compact = true)
                         }
                     }
-                    Column(
-                        Modifier.weight(1f).verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        LevelControl(ride.level, config, big = w.tablet, onChange = { vm.changeLevel(it) })
+                    if (w.tablet) {
+                        // Tablet: Steuerung mittig in der rechten Hälfte, gut erreichbar
+                        Column(
+                            Modifier.weight(1f).fillMaxSize(),
+                            verticalArrangement = Arrangement.Center,
+                        ) {
+                            LevelControl(ride.level, config, big = true, onChange = { vm.changeLevel(it) })
+                        }
+                    } else {
+                        Column(
+                            Modifier.weight(1f).verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            LevelControl(ride.level, config, big = false, onChange = { vm.changeLevel(it) })
+                        }
                     }
                 }
             } else {
@@ -127,7 +137,7 @@ fun FreeRideScreen(vm: Engine) {
                         .padding(bottom = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
-                    ElapsedTime(ride.elapsedSec, size = if (w.tablet) 112 else 64)
+                    ElapsedTime(ride.elapsedSec, size = if (w.tablet) 136 else 64)
                     if (w.tablet) {
                         MetricGrid(metrics, columns = 3, compact = false, large = true)
                     } else {
@@ -179,15 +189,15 @@ private fun ElapsedTime(seconds: Int, size: Int) {
 private fun LevelControl(level: Int, config: LevelConfig, big: Boolean, onChange: (Int) -> Unit) {
     val haptic = LocalHapticFeedback.current
     val watts = config.watts(level)
-    val button = if (big) 136.dp else 96.dp
-    val icon = if (big) 56.dp else 40.dp
+    val button = if (big) 160.dp else 96.dp
+    val icon = if (big) 64.dp else 40.dp
 
     Column(
         Modifier
             .fillMaxWidth()
             .card()
-            .padding(if (big) 24.dp else 16.dp),
-        verticalArrangement = Arrangement.spacedBy(if (big) 24.dp else 16.dp),
+            .padding(if (big) 32.dp else 16.dp),
+        verticalArrangement = Arrangement.spacedBy(if (big) 32.dp else 16.dp),
     ) {
         Row(
             Modifier.fillMaxWidth(),
@@ -231,7 +241,7 @@ private fun LevelControl(level: Int, config: LevelConfig, big: Boolean, onChange
                 ) { l ->
                     Text(
                         l.toString(),
-                        fontSize = if (big) 128.sp else 72.sp,
+                        fontSize = if (big) 160.sp else 72.sp,
                         fontWeight = FontWeight.SemiBold,
                         style = Tnum,
                     )
@@ -241,7 +251,7 @@ private fun LevelControl(level: Int, config: LevelConfig, big: Boolean, onChange
                     Spacer(Modifier.width(8.dp))
                     Text(
                         if (level == 0) "Leerlauf" else "$watts W",
-                        fontSize = if (big) 36.sp else 24.sp,
+                        fontSize = if (big) 44.sp else 24.sp,
                         fontWeight = FontWeight.Medium,
                         style = Tnum,
                     )
@@ -260,6 +270,6 @@ private fun LevelControl(level: Int, config: LevelConfig, big: Boolean, onChange
             ) { Icon(AppIcons.Plus, contentDescription = "Stufe hoch", modifier = Modifier.size(icon)) }
         }
 
-        LevelScale(level = level, config = config, height = if (big) 56.dp else 32.dp)
+        LevelScale(level = level, config = config, height = if (big) 96.dp else 32.dp)
     }
 }
