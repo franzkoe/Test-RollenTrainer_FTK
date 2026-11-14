@@ -21,57 +21,88 @@
 package de.rollentrainer.app.ui
 
 import android.app.Activity
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
+
+/*
+ * Gestaltung nach der Methode „unslop“ von Damir Sokolovsky (@heydamir, CC BY 4.0,
+ * https://github.com/heydamir/unslop):
+ * eine neutrale Graphit-Farbreihe für alle Flächen, drei Textrollen, ein Akzent (Petrol),
+ * Tiefe über Flächenstufen und Haarlinien, Radius nach Größe statt Pillenform.
+ * Farbe tragen nur die Momente: Intensitätsskala, Trainingsprofil und Verlaufskurven.
+ */
 
 private val DarkColors = darkColorScheme(
     primary = Color(0xFF4FD1C5),
-    onPrimary = Color(0xFF00201D),
-    primaryContainer = Color(0xFF12504A),
+    onPrimary = Color(0xFF06201D),
+    primaryContainer = Color(0xFF123F3A),
     onPrimaryContainer = Color(0xFFB5F2EB),
-    secondary = Color(0xFF8AB4F8),
-    onSecondary = Color(0xFF0B1F3A),
-    secondaryContainer = Color(0xFF263447),
-    onSecondaryContainer = Color(0xFFD6E3F7),
-    background = Color(0xFF0E1116),
-    onBackground = Color(0xFFE8ECF1),
-    surface = Color(0xFF0E1116),
-    onSurface = Color(0xFFE8ECF1),
-    surfaceVariant = Color(0xFF1C222B),
-    onSurfaceVariant = Color(0xFFA9B4C2),
-    surfaceContainerLowest = Color(0xFF0B0E12),
-    surfaceContainerLow = Color(0xFF151A21),
-    surfaceContainer = Color(0xFF1A2028),
-    surfaceContainerHigh = Color(0xFF1F2630),
-    surfaceContainerHighest = Color(0xFF262E39),
-    outline = Color(0xFF5B6675),
-    error = Color(0xFFFF6B60),
+    secondary = Color(0xFFA1A1A6),
+    onSecondary = Color(0xFF141415),
+    secondaryContainer = Color(0xFF232325), // angehobene Fläche (Zweitaktionen, Regler)
+    onSecondaryContainer = Color(0xFFEDEDED),
+    background = Color(0xFF141415),
+    onBackground = Color(0xFFEDEDED),
+    surface = Color(0xFF141415),
+    onSurface = Color(0xFFEDEDED), // Text primär
+    surfaceVariant = Color(0xFF19191B), // Karte
+    onSurfaceVariant = Color(0xFFA1A1A6), // Text sekundär
+    surfaceContainerLowest = Color(0xFF0F0F10),
+    surfaceContainerLow = Color(0xFF19191B),
+    surfaceContainer = Color(0xFF19191B),
+    surfaceContainerHigh = Color(0xFF1E1E20),
+    surfaceContainerHighest = Color(0xFF232325),
+    outline = Color(0xFF85858B), // Text gedämpft, Feldrahmen
+    outlineVariant = Color(0xFF2A2A2D),
+    error = Color(0xFFE5484D),
+    onError = Color(0xFFFFFFFF),
+    errorContainer = Color(0xFF3A1A1C),
+    onErrorContainer = Color(0xFFF5C6C8),
 )
 
 private val LightColors = lightColorScheme(
-    primary = Color(0xFF00796B),
+    primary = Color(0xFF0F766E),
     onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFFB2DFDB),
-    onPrimaryContainer = Color(0xFF00201D),
-    secondary = Color(0xFF3B5B8C),
-    secondaryContainer = Color(0xFFDCE6F5),
-    onSecondaryContainer = Color(0xFF14233A),
-    background = Color(0xFFF6F8FA),
-    onBackground = Color(0xFF14181D),
-    surface = Color(0xFFF6F8FA),
-    onSurface = Color(0xFF14181D),
-    surfaceVariant = Color(0xFFE6EAF0),
-    onSurfaceVariant = Color(0xFF4A5563),
-    surfaceContainerLow = Color(0xFFEFF2F6),
-    surfaceContainer = Color(0xFFEAEEF3),
-    surfaceContainerHigh = Color(0xFFE4E9EF),
-    surfaceContainerHighest = Color(0xFFDEE4EB),
+    primaryContainer = Color(0xFFCCEBE6),
+    onPrimaryContainer = Color(0xFF06201D),
+    secondary = Color(0xFF525252),
+    onSecondary = Color(0xFFFFFFFF),
+    secondaryContainer = Color(0xFFF4F4F5),
+    onSecondaryContainer = Color(0xFF171717),
+    background = Color(0xFFFAFAFA),
+    onBackground = Color(0xFF171717),
+    surface = Color(0xFFFAFAFA),
+    onSurface = Color(0xFF171717),
+    surfaceVariant = Color(0xFFFFFFFF),
+    onSurfaceVariant = Color(0xFF525252),
+    surfaceContainerLowest = Color(0xFFFFFFFF),
+    surfaceContainerLow = Color(0xFFFFFFFF),
+    surfaceContainer = Color(0xFFFFFFFF),
+    surfaceContainerHigh = Color(0xFFFFFFFF),
+    surfaceContainerHighest = Color(0xFFF4F4F5),
+    outline = Color(0xFF737373),
+    outlineVariant = Color(0xFFE5E5E5),
+    error = Color(0xFFDC2626),
+    onError = Color(0xFFFFFFFF),
+    errorContainer = Color(0xFFFDECEC),
+    onErrorContainer = Color(0xFF7F1D1D),
+)
+
+private val AppShapes = Shapes(
+    extraSmall = RoundedCornerShape(6.dp),
+    small = RoundedCornerShape(8.dp),
+    medium = RoundedCornerShape(12.dp),
+    large = RoundedCornerShape(16.dp),
+    extraLarge = RoundedCornerShape(20.dp),
 )
 
 @Composable
@@ -89,16 +120,25 @@ fun RollentrainerTheme(light: Boolean, content: @Composable () -> Unit) {
     }
     MaterialTheme(
         colorScheme = if (light) LightColors else DarkColors,
+        shapes = AppShapes,
         content = content,
     )
 }
 
-/** Farbliche Kennzeichnung der Intensität: grau (Leerlauf) → grün → gelb → orange → rot. */
+/**
+ * Intensitätsskala (die Kennfarbe der App): grau (Leerlauf) → grün → gelb → orange → rot.
+ * Wird nur als Fläche verwendet (Balken, Streifen, Punkte), nie als Textfarbe.
+ */
 fun intensityColor(watts: Int): Color = when {
-    watts <= 0 -> Color(0xFF7A8594)
-    watts < 130 -> Color(0xFF34C759)
-    watts < 220 -> Color(0xFFA6CE39)
-    watts < 300 -> Color(0xFFFFCC00)
-    watts < 400 -> Color(0xFFFF9500)
-    else -> Color(0xFFFF453A)
+    watts <= 0 -> Color(0xFF8A8A90)
+    watts < 130 -> Color(0xFF3FAE77)
+    watts < 220 -> Color(0xFF93B83F)
+    watts < 300 -> Color(0xFFDDAE2F)
+    watts < 400 -> Color(0xFFE08A3C)
+    else -> Color(0xFFD9534F)
 }
+
+/** Zustandsfarben, gedämpft, passend zu beiden Farbreihen. */
+val StatusPositive = Color(0xFF34A86B)
+val StatusPending = Color(0xFFDDAE2F)
+val StatusNegative = Color(0xFFE5484D)

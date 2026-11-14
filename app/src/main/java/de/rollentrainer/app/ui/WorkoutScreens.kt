@@ -45,17 +45,15 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.animation.core.tween
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -90,20 +88,20 @@ fun WorkoutListScreen(vm: Engine) {
 
     Column(Modifier.fillMaxSize()) {
         TopBar("Trainingsauswahl", conn, onBack = { vm.back() })
-        Column(
+        if (workouts.isEmpty()) {
+            EmptyState(
+                title = "Noch kein Training gespeichert",
+                text = "Lege unten ein Intervalltraining an: Aufwärmen, Intervalle, " +
+                    "Pausen und Ausfahren.",
+                modifier = Modifier.weight(1f),
+            )
+        } else Column(
             Modifier
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            if (workouts.isEmpty()) {
-                Text(
-                    "Noch kein Training gespeichert. Tippe auf „Neues Training erstellen“.",
-                    fontSize = 16.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
             workouts.forEach { w ->
                 WorkoutCard(
                     w = w,
@@ -116,9 +114,9 @@ fun WorkoutListScreen(vm: Engine) {
         }
         Button(
             onClick = { vm.newWorkout() },
-            modifier = Modifier.fillMaxWidth().padding(16.dp).height(64.dp),
+            modifier = Modifier.fillMaxWidth().padding(16.dp).height(56.dp),
         ) {
-            Text("＋  Neues Training erstellen", fontSize = 19.sp, fontWeight = FontWeight.SemiBold)
+            IconLabel(AppIcons.Plus, "Neues Training erstellen")
         }
     }
 
@@ -162,33 +160,34 @@ private fun WorkoutCard(
     Column(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(22.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .card()
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(w.name, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-        Text(summary(w), fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(w.name, fontSize = 20.sp, lineHeight = 26.sp, fontWeight = FontWeight.Medium)
+            Text(
+                summary(w),
+                fontSize = 14.sp,
+                style = Tnum,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         WorkoutChart(w.phases(), Modifier.fillMaxWidth().height(48.dp))
         Button(onClick = onStart, modifier = Modifier.fillMaxWidth().height(56.dp)) {
-            Text("▶  Starten", fontSize = 19.sp, fontWeight = FontWeight.SemiBold)
+            IconLabel(AppIcons.Play, "Starten")
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(
-                onClick = onEdit,
-                modifier = Modifier.weight(1f).height(48.dp),
-                contentPadding = PaddingValues(horizontal = 4.dp),
-            ) { Text("Bearbeiten", maxLines = 1) }
-            OutlinedButton(
-                onClick = onDuplicate,
-                modifier = Modifier.weight(1f).height(48.dp),
-                contentPadding = PaddingValues(horizontal = 4.dp),
-            ) { Text("Duplizieren", maxLines = 1) }
-            OutlinedButton(
-                onClick = onDelete,
-                modifier = Modifier.weight(1f).height(48.dp),
-                contentPadding = PaddingValues(horizontal = 4.dp),
-            ) { Text("Löschen", maxLines = 1, color = MaterialTheme.colorScheme.error) }
+        // Verwaltung bleibt ruhig: Textaktionen statt dreier gleich lauter Buttons
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            TextButton(onClick = onEdit) {
+                Text("Bearbeiten", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            TextButton(onClick = onDuplicate) {
+                Text("Duplizieren", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            TextButton(onClick = onDelete) {
+                Text("Löschen", color = MaterialTheme.colorScheme.error)
+            }
         }
     }
 }
@@ -223,20 +222,25 @@ fun WorkoutEditorScreen(vm: Engine) {
             Column(
                 Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(22.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .card()
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Vorschau", fontSize = 15.sp, modifier = Modifier.weight(1f))
+                    Text(
+                        "Ablauf",
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f),
+                    )
                     Text(
                         "Gesamtdauer " + formatMs(w.totalSeconds()),
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium,
+                        style = Tnum,
                     )
                 }
-                WorkoutChart(w.phases(), Modifier.fillMaxWidth().height(90.dp))
+                WorkoutChart(w.phases(), Modifier.fillMaxWidth().height(88.dp))
             }
 
             PhaseEditor(
@@ -277,16 +281,15 @@ fun WorkoutEditorScreen(vm: Engine) {
             Column(
                 Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(22.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .card()
                     .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "Ausfahren (optional)",
-                        fontSize = 19.sp,
-                        fontWeight = FontWeight.Bold,
+                        "Ausfahren",
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Medium,
                         modifier = Modifier.weight(1f),
                     )
                     Switch(
@@ -313,12 +316,12 @@ fun WorkoutEditorScreen(vm: Engine) {
         ) {
             FilledTonalButton(
                 onClick = { vm.saveEditing() },
-                modifier = Modifier.weight(1f).height(64.dp),
-            ) { Text("Speichern", fontSize = 19.sp, fontWeight = FontWeight.SemiBold) }
+                modifier = Modifier.weight(1f).height(56.dp),
+            ) { Text("Speichern", fontSize = 18.sp, fontWeight = FontWeight.Medium) }
             Button(
                 onClick = { vm.startEditing() },
-                modifier = Modifier.weight(1f).height(64.dp),
-            ) { Text("▶  Start", fontSize = 19.sp, fontWeight = FontWeight.SemiBold) }
+                modifier = Modifier.weight(1f).height(56.dp),
+            ) { IconLabel(AppIcons.Play, "Start") }
         }
     }
 }
@@ -328,12 +331,11 @@ private fun Section(title: String, content: @Composable () -> Unit) {
     Column(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(22.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .card()
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(title, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+        Text(title, fontSize = 17.sp, fontWeight = FontWeight.Medium)
         content()
     }
 }
@@ -369,7 +371,7 @@ private fun PhaseFields(
     Stepper(
         label = "Leistung",
         valueText = if (watts == 0) "Leerlauf" else "$watts W",
-        valueColor = intensityColor(watts),
+        dotWatts = watts,
         onMinus = { onWatts((watts - 5).coerceAtLeast(0)) },
         onPlus = { onWatts((watts + 5).coerceAtMost(MAX_WATTS)) },
     )
@@ -386,30 +388,37 @@ private fun Stepper(
     valueText: String,
     onMinus: () -> Unit,
     onPlus: () -> Unit,
-    valueColor: Color = Color.Unspecified,
+    dotWatts: Int? = null,
 ) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, fontSize = 17.sp, modifier = Modifier.weight(1f))
+        Text(
+            label,
+            fontSize = 16.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+        )
         FilledTonalButton(
             onClick = onMinus,
             modifier = Modifier.size(56.dp),
-            shape = RoundedCornerShape(16.dp),
             contentPadding = PaddingValues(0.dp),
-        ) { Text("–", fontSize = 28.sp, fontWeight = FontWeight.Bold) }
-        Text(
-            valueText,
-            fontSize = 21.sp,
-            fontWeight = FontWeight.Bold,
-            color = valueColor,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.width(112.dp),
-        )
+        ) { Icon(AppIcons.Minus, contentDescription = "weniger", modifier = Modifier.size(24.dp)) }
+        // Wert in Textfarbe; die Intensität zeigt der Punkt, nicht die Schrift
+        Row(
+            Modifier.width(120.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (dotWatts != null) {
+                IntensityDot(dotWatts)
+                Spacer(Modifier.width(8.dp))
+            }
+            Text(valueText, fontSize = 20.sp, fontWeight = FontWeight.Medium, style = Tnum)
+        }
         FilledTonalButton(
             onClick = onPlus,
             modifier = Modifier.size(56.dp),
-            shape = RoundedCornerShape(16.dp),
             contentPadding = PaddingValues(0.dp),
-        ) { Text("+", fontSize = 28.sp, fontWeight = FontWeight.Bold) }
+        ) { Icon(AppIcons.Plus, contentDescription = "mehr", modifier = Modifier.size(24.dp)) }
     }
 }
 
@@ -440,11 +449,11 @@ fun WorkoutRunScreen(vm: Engine) {
             run.finished -> {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
-                        "Training abgeschlossen! 🎉",
-                        fontSize = 34.sp,
-                        fontWeight = FontWeight.Black,
+                        "Training abgeschlossen",
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Medium,
                         textAlign = TextAlign.Center,
-                        lineHeight = 44.sp,
+                        lineHeight = 36.sp,
                         modifier = Modifier.padding(24.dp),
                     )
                 }
@@ -461,13 +470,13 @@ fun WorkoutRunScreen(vm: Engine) {
                     ) {
                         Column(
                             Modifier.weight(1f).verticalScroll(rememberScrollState()),
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
                             PhasePanel(run)
                         }
                         Column(
                             Modifier.weight(1f).verticalScroll(rememberScrollState()),
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
                             ProgressPanel(run)
                             MetricGrid(metrics, columns = 3, compact = true)
@@ -504,13 +513,13 @@ fun WorkoutRunScreen(vm: Engine) {
                         askEnd = false
                         vm.endSession()
                     },
-                    modifier = Modifier.height(52.dp),
+                    modifier = Modifier.height(48.dp),
                 ) { Text("Ja", fontSize = 18.sp) }
             },
             dismissButton = {
                 OutlinedButton(
                     onClick = { askEnd = false },
-                    modifier = Modifier.height(52.dp),
+                    modifier = Modifier.height(48.dp),
                 ) { Text("Nein", fontSize = 18.sp) }
             },
         )
@@ -522,27 +531,31 @@ fun WorkoutRunScreen(vm: Engine) {
 private fun PhasePanel(run: RunUi) {
     val phase = run.phases[run.phaseIndex.coerceIn(0, run.phases.size - 1)]
     val shownWatts = if (run.paused) 0 else phase.watts
-    val color by animateColorAsState(intensityColor(shownWatts), label = "phaseColor")
+    val color by animateColorAsState(
+        intensityColor(shownWatts), tween(300, easing = AppEasing), label = "phaseColor"
+    )
 
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(26.dp))
-            .background(color.copy(alpha = 0.18f))
-            .padding(18.dp),
+    // Die Phase färbt nur den Streifen oben; Schrift und Fläche bleiben ruhig und gut lesbar
+    Column(Modifier.fillMaxWidth().card()) {
+      Box(Modifier.fillMaxWidth().height(8.dp).background(color))
+      Column(
+        Modifier.fillMaxWidth().padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+      ) {
         AnimatedContent(
             targetState = if (run.paused) "Pausiert" else phase.label,
-            transitionSpec = { fadeIn() togetherWith fadeOut() },
+            transitionSpec = {
+                fadeIn(tween(160, easing = AppEasing)) togetherWith
+                    fadeOut(tween(160, easing = AppEasing))
+            },
             label = "phaseLabel",
         ) { label ->
             Text(
                 label,
-                fontSize = 26.sp,
-                fontWeight = FontWeight.Bold,
-                color = color,
+                fontSize = 24.sp,
+                lineHeight = 30.sp,
+                fontWeight = FontWeight.Medium,
                 textAlign = TextAlign.Center,
             )
         }
@@ -558,9 +571,9 @@ private fun PhasePanel(run: RunUi) {
                 )
                 Text(
                     if (phase.watts == 0) "Leerlauf" else "${phase.watts} W",
-                    fontSize = if (phase.watts == 0) 34.sp else 46.sp,
-                    fontWeight = FontWeight.Black,
-                    fontFamily = FontFamily.Monospace,
+                    fontSize = if (phase.watts == 0) 32.sp else 44.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    style = Tnum,
                 )
             }
             Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -571,12 +584,13 @@ private fun PhasePanel(run: RunUi) {
                 )
                 Text(
                     formatMs(run.phaseRemainingSec),
-                    fontSize = 46.sp,
-                    fontWeight = FontWeight.Black,
-                    fontFamily = FontFamily.Monospace,
+                    fontSize = 44.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    style = Tnum,
                 )
             }
         }
+      }
     }
 }
 
@@ -590,10 +604,9 @@ private fun ProgressPanel(run: RunUi) {
     Column(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(22.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+            .card()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -605,36 +618,33 @@ private fun ProgressPanel(run: RunUi) {
             Text(
                 formatMs(run.totalRemainingSec),
                 fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Medium,
+                style = Tnum,
             )
         }
-        WorkoutChart(run.phases, Modifier.fillMaxWidth().height(54.dp), progress = animated)
+        WorkoutChart(run.phases, Modifier.fillMaxWidth().height(56.dp), progress = animated)
         LinearProgressIndicator(
             progress = { animated },
-            modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
+            modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
+            trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
         )
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                "Als Nächstes: ",
-                fontSize = 15.sp,
+                "Als Nächstes  ",
+                fontSize = 14.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (next == null) {
-                Text("Ende des Trainings", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Text("Ende des Trainings", fontSize = 14.sp, fontWeight = FontWeight.Medium)
             } else {
-                Box(
-                    Modifier
-                        .size(12.dp)
-                        .clip(RoundedCornerShape(3.dp))
-                        .background(intensityColor(next.watts))
-                )
-                Spacer(Modifier.width(6.dp))
+                IntensityDot(next.watts)
+                Spacer(Modifier.width(8.dp))
                 Text(
                     next.label + "  ·  " + (if (next.watts == 0) "Leerlauf" else "${next.watts} W") +
                         "  ·  " + formatMs(next.seconds),
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    style = Tnum,
                     maxLines = 1,
                 )
             }
@@ -650,24 +660,22 @@ private fun RunButtons(run: RunUi, onPause: () -> Unit, onEnd: () -> Unit) {
     ) {
         Button(
             onClick = onPause,
-            modifier = Modifier.weight(1f).height(72.dp),
-            shape = RoundedCornerShape(22.dp),
+            modifier = Modifier.weight(1f).height(64.dp),
         ) {
-            Text(
-                if (run.paused) "▶  Weiter" else "⏸  Pause",
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
-            )
+            if (run.paused) {
+                IconLabel(AppIcons.Play, "Weiter", fontSize = 20, iconSize = 24)
+            } else {
+                IconLabel(AppIcons.Pause, "Pause", fontSize = 20, iconSize = 24)
+            }
         }
         OutlinedButton(
             onClick = onEnd,
-            modifier = Modifier.weight(1f).height(72.dp),
-            shape = RoundedCornerShape(22.dp),
+            modifier = Modifier.weight(1f).height(64.dp),
         ) {
             Text(
                 "Beenden",
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.error,
             )
         }

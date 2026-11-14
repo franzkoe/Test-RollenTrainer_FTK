@@ -22,18 +22,22 @@ package de.rollentrainer.app.ui
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -43,7 +47,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.ButtonColors
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -55,19 +61,162 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import de.rollentrainer.app.ble.BikeData
 import de.rollentrainer.app.ble.ConnState
+import de.rollentrainer.app.data.LEVEL_WATTS
+import de.rollentrainer.app.data.MAX_LEVEL
 import de.rollentrainer.app.data.Phase
 import java.util.Locale
 import kotlin.math.max
 import kotlin.math.roundToInt
+
+// ---------------------------------------------------------------- Gestaltungsbausteine
+
+/** Radius für Bedienelemente (Buttons, Eingaben); Karten haben 16, Dialoge 20. */
+val ControlShape: Shape = RoundedCornerShape(12.dp)
+
+/** Zahlen mit Tabellenziffern, damit laufende Werte nicht springen. */
+val Tnum = TextStyle(fontFeatureSettings = "tnum")
+
+/** Eine Kurve für alle Bewegungen. */
+val AppEasing = CubicBezierEasing(0.22f, 1f, 0.36f, 1f)
+
+/** Haarlinie: Textfarbe mit geringer Deckkraft. */
+@Composable
+fun hairline(): Color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)
+
+/** Karte: ruhige Fläche mit Haarlinie statt Schatten. */
+@Composable
+fun Modifier.card(radius: Dp = 16.dp): Modifier {
+    val shape = RoundedCornerShape(radius)
+    return this
+        .clip(shape)
+        .background(MaterialTheme.colorScheme.surfaceVariant)
+        .border(1.dp, hairline(), shape)
+}
+
+/** Hauptaktion: der Akzent. */
+@Composable
+fun Button(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    shape: Shape = ControlShape,
+    colors: ButtonColors = ButtonDefaults.buttonColors(),
+    contentPadding: PaddingValues = ButtonDefaults.ContentPadding,
+    content: @Composable RowScope.() -> Unit,
+) = androidx.compose.material3.Button(
+    onClick = onClick,
+    modifier = modifier,
+    enabled = enabled,
+    shape = shape,
+    colors = colors,
+    contentPadding = contentPadding,
+    content = content,
+)
+
+/** Zweitaktion: angehobene neutrale Fläche mit Haarlinie. */
+@Composable
+fun FilledTonalButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    shape: Shape = ControlShape,
+    colors: ButtonColors = ButtonDefaults.filledTonalButtonColors(),
+    contentPadding: PaddingValues = ButtonDefaults.ContentPadding,
+    content: @Composable RowScope.() -> Unit,
+) = androidx.compose.material3.FilledTonalButton(
+    onClick = onClick,
+    modifier = modifier,
+    enabled = enabled,
+    shape = shape,
+    colors = colors,
+    border = BorderStroke(1.dp, hairline()),
+    contentPadding = contentPadding,
+    content = content,
+)
+
+/** Ruhige Aktion: nur Haarlinie. */
+@Composable
+fun OutlinedButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    shape: Shape = ControlShape,
+    colors: ButtonColors = ButtonDefaults.outlinedButtonColors(
+        contentColor = MaterialTheme.colorScheme.onSurface,
+    ),
+    contentPadding: PaddingValues = ButtonDefaults.ContentPadding,
+    content: @Composable RowScope.() -> Unit,
+) = androidx.compose.material3.OutlinedButton(
+    onClick = onClick,
+    modifier = modifier,
+    enabled = enabled,
+    shape = shape,
+    colors = colors,
+    border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.16f)),
+    contentPadding = contentPadding,
+    content = content,
+)
+
+@Composable
+fun TextButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    content: @Composable RowScope.() -> Unit,
+) = androidx.compose.material3.TextButton(
+    onClick = onClick,
+    modifier = modifier,
+    enabled = enabled,
+    shape = ControlShape,
+    content = content,
+)
+
+/** Symbol und Beschriftung mit festem Abstand, für Buttons. */
+@Composable
+fun IconLabel(icon: ImageVector, text: String, fontSize: Int = 18, iconSize: Int = 20) {
+    Icon(icon, contentDescription = null, modifier = Modifier.size(iconSize.dp))
+    Spacer(Modifier.width(8.dp))
+    Text(text, fontSize = fontSize.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+}
+
+/** Kleiner Punkt in der Farbe der Intensitätsskala. */
+@Composable
+fun IntensityDot(watts: Int, size: Dp = 8.dp) {
+    val color by animateColorAsState(intensityColor(watts), tween(160), label = "intensity")
+    Box(Modifier.size(size).clip(CircleShape).background(color))
+}
+
+/** Leerer Zustand: mittig im freien Raum statt oben angeklebt. */
+@Composable
+fun EmptyState(title: String, text: String, modifier: Modifier = Modifier) {
+    Column(
+        modifier.fillMaxWidth().padding(horizontal = 32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text(title, fontSize = 18.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text,
+            fontSize = 15.sp,
+            lineHeight = 22.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
 
 // ---------------------------------------------------------------- Kopfzeile
 
@@ -75,27 +224,31 @@ import kotlin.math.roundToInt
 @Composable
 fun TopBar(title: String, conn: ConnState, onBack: (() -> Unit)? = null) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            Modifier.fillMaxWidth().height(48.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             if (onBack != null) {
                 FilledTonalButton(
                     onClick = onBack,
-                    modifier = Modifier.height(54.dp),
-                    contentPadding = PaddingValues(horizontal = 20.dp),
+                    modifier = Modifier.height(48.dp),
+                    contentPadding = PaddingValues(start = 12.dp, end = 16.dp),
                 ) {
-                    Text("←  Zurück", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                    IconLabel(AppIcons.Back, "Zurück", fontSize = 16)
                 }
             } else {
-                Text(title, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                Text(title, fontSize = 28.sp, lineHeight = 32.sp, fontWeight = FontWeight.Medium)
             }
             Spacer(Modifier.weight(1f))
             StatusChip(conn)
         }
         if (onBack != null) {
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(16.dp))
             Text(
                 title,
-                fontSize = 26.sp,
-                fontWeight = FontWeight.Bold,
+                fontSize = 28.sp,
+                lineHeight = 32.sp,
+                fontWeight = FontWeight.Medium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -103,29 +256,24 @@ fun TopBar(title: String, conn: ConnState, onBack: (() -> Unit)? = null) {
     }
 }
 
+/** Verbindungsstatus des Trainers: Punkt und ruhiger Text. */
 @Composable
 fun StatusChip(conn: ConnState) {
     val target = when (conn) {
-        ConnState.READY -> Color(0xFF34C759)
-        ConnState.CONNECTING -> Color(0xFFFFCC00)
-        ConnState.DISCONNECTED -> Color(0xFFFF453A)
+        ConnState.READY -> StatusPositive
+        ConnState.CONNECTING -> StatusPending
+        ConnState.DISCONNECTED -> StatusNegative
     }
-    val color by animateColorAsState(target, label = "status")
+    val color by animateColorAsState(target, tween(160), label = "status")
     val text = when (conn) {
         ConnState.READY -> "Trainer verbunden"
         ConnState.CONNECTING -> "Verbinde …"
         ConnState.DISCONNECTED -> "Nicht verbunden"
     }
-    Row(
-        modifier = Modifier
-            .clip(RoundedCornerShape(50))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(Modifier.size(12.dp).clip(CircleShape).background(color))
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(8.dp).clip(CircleShape).background(color))
         Spacer(Modifier.width(8.dp))
-        Text(text, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        Text(text, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -152,23 +300,29 @@ fun formatMs(totalSec: Int): String {
 
 // ---------------------------------------------------------------- Countdown
 
-/** Großer animierter Countdown: 3 – 2 – 1 – Start! (value 0 = „Start!“). */
+/** Großer Countdown: 3 – 2 – 1 – Start (value 0 = „Start“). */
 @Composable
 fun BigCountdown(value: Int) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         AnimatedContent(
             targetState = value,
             transitionSpec = {
-                (scaleIn(initialScale = 2.2f) + fadeIn()) togetherWith
-                    (scaleOut(targetScale = 0.4f) + fadeOut())
+                (fadeIn(tween(300, easing = AppEasing)) +
+                    scaleIn(tween(300, easing = AppEasing), initialScale = 0.92f)) togetherWith
+                    fadeOut(tween(160, easing = AppEasing))
             },
             label = "countdown",
         ) { v ->
             Text(
-                text = if (v <= 0) "Start!" else v.toString(),
-                fontSize = if (v <= 0) 84.sp else 180.sp,
-                fontWeight = FontWeight.Black,
-                color = if (v <= 0) Color(0xFF34C759) else MaterialTheme.colorScheme.primary,
+                text = if (v <= 0) "Start" else v.toString(),
+                fontSize = if (v <= 0) 72.sp else 160.sp,
+                fontWeight = FontWeight.SemiBold,
+                style = Tnum,
+                color = if (v <= 0) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
                 textAlign = TextAlign.Center,
             )
         }
@@ -218,17 +372,18 @@ fun MetricGrid(metrics: List<Metric>, columns: Int, compact: Boolean) {
     }
 }
 
+/** Kennzahl: Bezeichnung, große Zahl, Einheit – sonst nichts. */
 @Composable
 fun MetricTile(m: Metric, modifier: Modifier = Modifier, compact: Boolean = false) {
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(18.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(horizontal = 14.dp, vertical = if (compact) 8.dp else 12.dp),
+            .card()
+            .padding(horizontal = if (compact) 12.dp else 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Text(
             m.label,
-            fontSize = if (compact) 12.sp else 14.sp,
+            fontSize = 13.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -236,50 +391,82 @@ fun MetricTile(m: Metric, modifier: Modifier = Modifier, compact: Boolean = fals
         Row(verticalAlignment = Alignment.Bottom) {
             Text(
                 m.value,
-                fontSize = if (compact) 26.sp else 38.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace,
+                fontSize = if (compact) 24.sp else 36.sp,
+                fontWeight = FontWeight.Medium,
+                style = Tnum,
                 maxLines = 1,
             )
-            Spacer(Modifier.width(6.dp))
-            Text(
-                m.unit,
-                fontSize = if (compact) 12.sp else 15.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = if (compact) 4.dp else 6.dp),
-            )
+            if (m.unit.isNotEmpty()) {
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    m.unit,
+                    fontSize = if (compact) 12.sp else 14.sp,
+                    color = MaterialTheme.colorScheme.outline,
+                    maxLines = 1,
+                    modifier = Modifier.padding(bottom = if (compact) 4.dp else 6.dp),
+                )
+            }
         }
     }
 }
 
-// ---------------------------------------------------------------- Trainingsdiagramm
+// ---------------------------------------------------------------- Trainingsprofil
 
-/** Balkendiagramm des Trainingsablaufs; [progress] (0..1) zeichnet eine Positionsmarke. */
+/**
+ * Trainingsprofil: Balkenhöhe = Zielleistung, Farbe = Intensitätsskala.
+ * [progress] (0..1) zeichnet die aktuelle Position ein.
+ */
 @Composable
 fun WorkoutChart(phases: List<Phase>, modifier: Modifier = Modifier, progress: Float? = null) {
-    val markerColor = MaterialTheme.colorScheme.onBackground
+    val markerColor = MaterialTheme.colorScheme.onSurface
+    val base = hairline()
     Canvas(modifier) {
         val total = phases.sumOf { it.seconds }.toFloat()
         if (total <= 0f) return@Canvas
         val maxW = max(phases.maxOf { it.watts }, 100).toFloat()
+        val gap = 2.dp.toPx()
         var x = 0f
         phases.forEach { p ->
             val w = size.width * p.seconds / total
-            val h = size.height * (0.12f + 0.88f * p.watts / maxW)
+            val h = size.height * (0.10f + 0.90f * p.watts / maxW)
             drawRect(
                 color = intensityColor(p.watts),
-                topLeft = Offset(x + 1f, size.height - h),
-                size = Size(max(w - 2f, 1f), h),
+                topLeft = Offset(x, size.height - h),
+                size = Size(max(w - gap, 1f), h),
             )
             x += w
         }
+        drawLine(base, Offset(0f, size.height), Offset(size.width, size.height), 1.dp.toPx())
         if (progress != null) {
             val px = size.width * progress.coerceIn(0f, 1f)
             drawLine(
                 color = markerColor,
                 start = Offset(px, 0f),
                 end = Offset(px, size.height),
-                strokeWidth = 3.dp.toPx(),
+                strokeWidth = 2.dp.toPx(),
+            )
+        }
+    }
+}
+
+// ---------------------------------------------------------------- Stufenskala
+
+/**
+ * Die 20 Widerstandsstufen als ansteigende Balken in den Farben der Intensitätsskala.
+ * Stufen bis [level] sind farbig, die übrigen neutral.
+ */
+@Composable
+fun LevelScale(level: Int, height: Dp, modifier: Modifier = Modifier) {
+    val idle = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+    Canvas(modifier.fillMaxWidth().height(height)) {
+        val gap = 4.dp.toPx()
+        val w = (size.width - gap * (MAX_LEVEL - 1)) / MAX_LEVEL
+        for (i in 1..MAX_LEVEL) {
+            val h = size.height * (0.30f + 0.70f * i / MAX_LEVEL)
+            drawRect(
+                color = if (i <= level) intensityColor(LEVEL_WATTS[i]) else idle,
+                topLeft = Offset((i - 1) * (w + gap), size.height - h),
+                size = Size(w, h),
             )
         }
     }

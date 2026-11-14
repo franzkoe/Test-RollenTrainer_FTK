@@ -44,9 +44,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
+import androidx.compose.animation.core.tween
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -100,14 +102,14 @@ fun FreeRideScreen(vm: Engine) {
                 ) {
                     Column(
                         Modifier.weight(1f).verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         ElapsedTime(ride.elapsedSec, small = true)
                         MetricGrid(metrics, columns = 3, compact = true)
                     }
                     Column(
                         Modifier.weight(1f).verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         LevelControl(ride.level, onChange = { vm.changeLevel(it) })
                     }
@@ -119,7 +121,7 @@ fun FreeRideScreen(vm: Engine) {
                         .verticalScroll(rememberScrollState())
                         .padding(horizontal = 16.dp)
                         .padding(bottom = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
                     ElapsedTime(ride.elapsedSec, small = false)
                     MetricGrid(metrics, columns = 2, compact = false)
@@ -139,13 +141,13 @@ fun FreeRideScreen(vm: Engine) {
                         askEnd = false
                         vm.endSession()
                     },
-                    modifier = Modifier.height(52.dp),
+                    modifier = Modifier.height(48.dp),
                 ) { Text("Ja", fontSize = 18.sp) }
             },
             dismissButton = {
                 OutlinedButton(
                     onClick = { askEnd = false },
-                    modifier = Modifier.height(52.dp),
+                    modifier = Modifier.height(48.dp),
                 ) { Text("Nein", fontSize = 18.sp) }
             },
         )
@@ -156,9 +158,9 @@ fun FreeRideScreen(vm: Engine) {
 private fun ElapsedTime(seconds: Int, small: Boolean) {
     Text(
         formatHms(seconds),
-        fontSize = if (small) 52.sp else 68.sp,
-        fontWeight = FontWeight.Bold,
-        fontFamily = FontFamily.Monospace,
+        fontSize = if (small) 48.sp else 64.sp,
+        fontWeight = FontWeight.Medium,
+        style = Tnum,
         modifier = Modifier.fillMaxWidth(),
         textAlign = androidx.compose.ui.text.style.TextAlign.Center,
     )
@@ -169,15 +171,13 @@ private fun ElapsedTime(seconds: Int, small: Boolean) {
 private fun LevelControl(level: Int, onChange: (Int) -> Unit) {
     val haptic = LocalHapticFeedback.current
     val watts = LEVEL_WATTS[level]
-    val color by animateColorAsState(intensityColor(watts), label = "levelColor")
 
     Column(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(26.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .card()
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Row(
             Modifier.fillMaxWidth(),
@@ -190,9 +190,9 @@ private fun LevelControl(level: Int, onChange: (Int) -> Unit) {
                 },
                 enabled = level > 0,
                 modifier = Modifier.size(96.dp),
-                shape = RoundedCornerShape(26.dp),
+                shape = RoundedCornerShape(20.dp),
                 contentPadding = PaddingValues(0.dp),
-            ) { Text("–", fontSize = 56.sp, fontWeight = FontWeight.Bold) }
+            ) { Icon(AppIcons.Minus, contentDescription = "Stufe runter", modifier = Modifier.size(40.dp)) }
 
             Column(
                 Modifier.weight(1f),
@@ -200,18 +200,21 @@ private fun LevelControl(level: Int, onChange: (Int) -> Unit) {
             ) {
                 Text(
                     "Stufe",
-                    fontSize = 15.sp,
+                    fontSize = 14.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 AnimatedContent(
                     targetState = level,
                     transitionSpec = {
+                        // Kurz und klein: die Zahl rückt ein Stück in Schaltrichtung nach
+                        val spec = tween<androidx.compose.ui.unit.IntOffset>(160, easing = AppEasing)
+                        val fade = tween<Float>(160, easing = AppEasing)
                         if (targetState > initialState) {
-                            (slideInVertically { it } + fadeIn()) togetherWith
-                                (slideOutVertically { -it } + fadeOut())
+                            (slideInVertically(spec) { it / 4 } + fadeIn(fade)) togetherWith
+                                (slideOutVertically(spec) { -it / 4 } + fadeOut(fade))
                         } else {
-                            (slideInVertically { -it } + fadeIn()) togetherWith
-                                (slideOutVertically { it } + fadeOut())
+                            (slideInVertically(spec) { -it / 4 } + fadeIn(fade)) togetherWith
+                                (slideOutVertically(spec) { it / 4 } + fadeOut(fade))
                         }
                     },
                     label = "level",
@@ -219,16 +222,20 @@ private fun LevelControl(level: Int, onChange: (Int) -> Unit) {
                     Text(
                         l.toString(),
                         fontSize = 72.sp,
-                        fontWeight = FontWeight.Black,
-                        fontFamily = FontFamily.Monospace,
-                        color = color,
+                        fontWeight = FontWeight.SemiBold,
+                        style = Tnum,
                     )
                 }
-                Text(
-                    if (level == 0) "Leerlauf" else "$watts W",
-                    fontSize = 26.sp,
-                    fontWeight = FontWeight.SemiBold,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IntensityDot(watts, size = 12.dp)
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        if (level == 0) "Leerlauf" else "$watts W",
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Medium,
+                        style = Tnum,
+                    )
+                }
             }
 
             Button(
@@ -238,30 +245,11 @@ private fun LevelControl(level: Int, onChange: (Int) -> Unit) {
                 },
                 enabled = level < MAX_LEVEL,
                 modifier = Modifier.size(96.dp),
-                shape = RoundedCornerShape(26.dp),
+                shape = RoundedCornerShape(20.dp),
                 contentPadding = PaddingValues(0.dp),
-            ) { Text("+", fontSize = 56.sp, fontWeight = FontWeight.Bold) }
+            ) { Icon(AppIcons.Plus, contentDescription = "Stufe hoch", modifier = Modifier.size(40.dp)) }
         }
 
-        // Stufenleiste
-        Row(
-            Modifier.fillMaxWidth().height(34.dp),
-            horizontalArrangement = Arrangement.spacedBy(3.dp),
-            verticalAlignment = Alignment.Bottom,
-        ) {
-            for (i in 1..MAX_LEVEL) {
-                val active = i <= level
-                Box(
-                    Modifier
-                        .weight(1f)
-                        .height((10 + i * 1.2f).dp)
-                        .clip(RoundedCornerShape(3.dp))
-                        .background(
-                            if (active) intensityColor(LEVEL_WATTS[i])
-                            else MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
-                        ),
-                )
-            }
-        }
+        LevelScale(level = level, height = 32.dp)
     }
 }

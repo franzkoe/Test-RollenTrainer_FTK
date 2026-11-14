@@ -36,14 +36,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -123,35 +122,37 @@ fun LineChart(
     title: String,
     unit: String,
     values: List<Float?>,
-    color: Color,
     durationSec: Int,
     decimals: Boolean = false,
+    main: Boolean = false,
 ) {
+    // Eine Hauptkurve im Akzent, die übrigen kleiner und neutral
+    val color = if (main) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
     val points = remember(values) { downsample(values, 360) }
     val present = points.filterNotNull()
     if (present.isEmpty()) return
     val maxV = max(present.max(), 1f)
     val avg = values.filterNotNull().average()
-    val grid = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+    val grid = hairline()
     fun fmt(v: Double): String = if (decimals) one(v) else v.roundToInt().toString()
 
     Column(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(22.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+            .card()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(title, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            Text(title, fontSize = 16.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
             Text(
                 "Ø ${fmt(avg)} · max. ${fmt(maxV.toDouble())} $unit",
-                fontSize = 14.sp,
+                fontSize = 13.sp,
+                style = Tnum,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        Canvas(Modifier.fillMaxWidth().height(120.dp)) {
+        Canvas(Modifier.fillMaxWidth().height(if (main) 160.dp else 72.dp)) {
             val top = 4.dp.toPx()
             val h = size.height - top
             // Hilfslinien: Maximum, Mitte, Null
@@ -171,15 +172,16 @@ fun LineChart(
                     pen = true
                 }
             }
-            drawPath(path, color, style = Stroke(width = 2.5.dp.toPx()))
+            drawPath(path, color, style = Stroke(width = (if (main) 2f else 1.5f).dp.toPx()))
         }
         Row {
-            Text("00:00", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("00:00", fontSize = 12.sp, style = Tnum, color = MaterialTheme.colorScheme.outline)
             Spacer(Modifier.weight(1f))
             Text(
                 formatMs(durationSec),
                 fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = Tnum,
+                color = MaterialTheme.colorScheme.outline,
             )
         }
     }
@@ -191,19 +193,19 @@ fun RideCharts(s: RideSummary, samples: List<Sample>) {
     if (samples.isEmpty()) return
     LineChart(
         "Leistung", "W", samples.map { it.powerW?.toFloat() },
-        Color(0xFFFF9500), s.durationSec,
+        s.durationSec, main = true,
     )
     LineChart(
         "Geschwindigkeit", "km/h", samples.map { it.speedKmh?.toFloat() },
-        Color(0xFF4FD1C5), s.durationSec, decimals = true,
+        s.durationSec, decimals = true,
     )
     LineChart(
         "Puls", "bpm", samples.map { it.heartRate?.takeIf { v -> v > 0 }?.toFloat() },
-        Color(0xFFFF453A), s.durationSec,
+        s.durationSec,
     )
     LineChart(
         "Kadenz", "rpm", samples.map { it.cadenceRpm?.toFloat() },
-        Color(0xFF8AB4F8), s.durationSec,
+        s.durationSec,
     )
 }
 
@@ -229,7 +231,7 @@ fun SummaryScreen(vm: Engine) {
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Text(p.summary.name, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                Text(p.summary.name, fontSize = 22.sp, fontWeight = FontWeight.Medium)
                 Text(
                     "Möchtest du diese Fahrt speichern?",
                     fontSize = 16.sp,
@@ -247,19 +249,19 @@ fun SummaryScreen(vm: Engine) {
         ) {
             OutlinedButton(
                 onClick = { askDiscard = true },
-                modifier = Modifier.weight(1f).height(68.dp),
+                modifier = Modifier.weight(1f).height(56.dp),
             ) {
                 Text(
                     "Verwerfen",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.error,
                 )
             }
             Button(
                 onClick = { vm.savePending() },
-                modifier = Modifier.weight(1f).height(68.dp),
-            ) { Text("Speichern", fontSize = 20.sp, fontWeight = FontWeight.SemiBold) }
+                modifier = Modifier.weight(1f).height(56.dp),
+            ) { Text("Speichern", fontSize = 18.sp, fontWeight = FontWeight.Medium) }
         }
     }
 
@@ -298,48 +300,58 @@ fun HistoryScreen(vm: Engine) {
 
     Column(Modifier.fillMaxSize()) {
         TopBar("Verlauf", conn, onBack = { vm.back() })
-        Column(
+        if (rides.isEmpty()) {
+            EmptyState(
+                title = "Noch keine Fahrt gespeichert",
+                text = "Nach jeder Freien Fahrt und jedem Training kannst du die " +
+                    "Aufzeichnung speichern. Sie erscheint dann hier.",
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else Column(
             Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            if (rides.isEmpty()) {
-                Text(
-                    "Noch keine Fahrt gespeichert. Nach jeder Freien Fahrt und jedem Training " +
-                        "kannst du die Aufzeichnung speichern.",
-                    fontSize = 16.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
             rides.forEach { r ->
-                Column(
+                Row(
                     Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(22.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .card()
                         .clickable { vm.openRide(r) }
                         .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(
-                        r.name,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        formatDate(r.startMs),
-                        fontSize = 14.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        formatMs(r.durationSec) + "  ·  " + km(r.distanceM) + " km" +
-                            (r.avgPower?.let { "  ·  Ø $it W" } ?: ""),
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold,
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            formatDate(r.startMs),
+                            fontSize = 13.sp,
+                            style = Tnum,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            r.name,
+                            fontSize = 18.sp,
+                            lineHeight = 24.sp,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            formatMs(r.durationSec) + "  ·  " + km(r.distanceM) + " km" +
+                                (r.avgPower?.let { "  ·  Ø $it W" } ?: ""),
+                            fontSize = 15.sp,
+                            style = Tnum,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Icon(
+                        AppIcons.Chevron,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.outline,
                     )
                 }
             }
@@ -376,28 +388,27 @@ fun RideDetailScreen(
             ) {
                 Text(
                     formatDate(d.summary.startMs),
-                    fontSize = 15.sp,
+                    fontSize = 14.sp,
+                    style = Tnum,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 MetricGrid(summaryMetrics(d.summary), columns = 2, compact = true)
                 RideCharts(d.summary, d.samples)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(
-                        onClick = { showRename = true },
-                        modifier = Modifier.weight(1f).height(50.dp),
-                    ) { Text("Umbenennen", maxLines = 1) }
-                    OutlinedButton(
-                        onClick = { showDelete = true },
-                        modifier = Modifier.weight(1f).height(50.dp),
-                    ) { Text("Löschen", maxLines = 1, color = MaterialTheme.colorScheme.error) }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    TextButton(onClick = { showRename = true }) {
+                        Text("Umbenennen", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    TextButton(onClick = { showDelete = true }) {
+                        Text("Löschen", color = MaterialTheme.colorScheme.error)
+                    }
                 }
             }
             Button(
                 onClick = { showExport = true },
                 enabled = d.samples.isNotEmpty(),
-                modifier = Modifier.fillMaxWidth().padding(16.dp).height(64.dp),
+                modifier = Modifier.fillMaxWidth().padding(16.dp).height(56.dp),
             ) {
-                Text("Exportieren (FIT / TCX)", fontSize = 19.sp, fontWeight = FontWeight.SemiBold)
+                Text("Exportieren", fontSize = 18.sp, fontWeight = FontWeight.Medium)
             }
         }
     }
@@ -420,28 +431,28 @@ fun RideDetailScreen(
                             showExport = false
                             onShare(ExportFormat.FIT)
                         },
-                        modifier = Modifier.fillMaxWidth().height(52.dp),
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
                     ) { Text("FIT teilen …") }
                     FilledTonalButton(
                         onClick = {
                             showExport = false
                             onSave(ExportFormat.FIT)
                         },
-                        modifier = Modifier.fillMaxWidth().height(52.dp),
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
                     ) { Text("FIT als Datei speichern") }
                     Button(
                         onClick = {
                             showExport = false
                             onShare(ExportFormat.TCX)
                         },
-                        modifier = Modifier.fillMaxWidth().height(52.dp),
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
                     ) { Text("TCX teilen …") }
                     FilledTonalButton(
                         onClick = {
                             showExport = false
                             onSave(ExportFormat.TCX)
                         },
-                        modifier = Modifier.fillMaxWidth().height(52.dp),
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
                     ) { Text("TCX als Datei speichern") }
                 }
             },

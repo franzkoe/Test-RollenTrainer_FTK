@@ -30,22 +30,26 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -53,6 +57,8 @@ import de.rollentrainer.app.Engine
 import de.rollentrainer.app.Screen
 import de.rollentrainer.app.ble.ConnState
 import de.rollentrainer.app.data.ExportFormat
+import de.rollentrainer.app.data.MAX_LEVEL
+import java.util.Locale
 
 @Composable
 fun App(
@@ -154,7 +160,7 @@ fun EnvironmentBanners(
         )
     } else if (!btOn) {
         Banner(
-            text = "Bluetooth ist ausgeschaltet.",
+            text = "Bluetooth ist ausgeschaltet",
             button = "Bluetooth einschalten",
             onClick = enableBluetooth,
         )
@@ -166,76 +172,110 @@ private fun Banner(text: String, button: String, onClick: () -> Unit) {
     Column(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(16.dp))
             .background(MaterialTheme.colorScheme.errorContainer)
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(text, color = MaterialTheme.colorScheme.onErrorContainer, fontSize = 15.sp)
-        Button(onClick = onClick) { Text(button) }
+        Text(
+            text,
+            color = MaterialTheme.colorScheme.onErrorContainer,
+            fontSize = 15.sp,
+            lineHeight = 22.sp,
+        )
+        Button(onClick = onClick, modifier = Modifier.height(48.dp)) { Text(button) }
     }
 }
 
 // ---------------------------------------------------------------- Hauptmenü
 
+/**
+ * Hauptmenü. Die beiden Wege aufs Rad (Freie Fahrt, Trainingsauswahl) sind die großen Kacheln und
+ * zeigen etwas Echtes aus der App: die Stufenskala bzw. das Profil des ersten Trainings.
+ * Geräte und Verlauf sind kompakte Zeilen mit dem aktuellen Stand.
+ */
 @Composable
 fun HomeScreen(vm: Engine, requestPermissions: () -> Unit, enableBluetooth: () -> Unit) {
     val conn by vm.connState.collectAsState()
+    val connAddress by vm.connectedAddress.collectAsState()
+    val devices by vm.devices.collectAsState()
+    val workouts by vm.workouts.collectAsState()
     val light by vm.lightTheme.collectAsState()
     val screenOn by vm.keepScreenOn.collectAsState()
     val rides by vm.rides.collectAsState()
+
+    val trainerName = devices.firstOrNull { it.address == connAddress }?.name
+    val firstWorkout = workouts.firstOrNull()
+    val lastRide = rides.firstOrNull()
+
     Column(Modifier.fillMaxSize()) {
         TopBar("Rollentrainer", conn)
         Column(
-            Modifier.fillMaxSize().padding(horizontal = 16.dp).padding(bottom = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            Modifier.fillMaxSize().padding(horizontal = 16.dp).padding(bottom = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             EnvironmentBanners(vm, requestPermissions, enableBluetooth)
-            MenuTile(
-                emoji = "📡",
+            MenuRow(
+                icon = AppIcons.Bluetooth,
                 title = "Geräte",
                 subtitle = when (conn) {
-                    ConnState.READY -> "Trainer verbunden"
-                    ConnState.CONNECTING -> "Verbindung wird aufgebaut …"
-                    ConnState.DISCONNECTED -> "Trainer suchen und verbinden"
+                    ConnState.READY -> (trainerName ?: "Trainer") + " verbunden"
+                    ConnState.CONNECTING -> "Verbindung zu " + (trainerName ?: "Trainer") + " wird aufgebaut"
+                    ConnState.DISCONNECTED ->
+                        if (devices.isEmpty()) "Trainer suchen und verbinden" else "Kein Trainer verbunden"
                 },
-                modifier = Modifier.weight(1f),
                 onClick = { vm.open(Screen.DEVICES) },
             )
             MenuTile(
-                emoji = "🚴",
+                icon = AppIcons.Bike,
                 title = "Freie Fahrt",
-                subtitle = "Widerstand in 21 Stufen frei wählen",
+                subtitle = "Widerstand in 21 Stufen, von Leerlauf bis 550 W",
                 modifier = Modifier.weight(1f),
                 onClick = { vm.openFreeRide() },
-            )
+            ) {
+                LevelScale(level = MAX_LEVEL, height = 32.dp)
+            }
             MenuTile(
-                emoji = "⏱️",
+                icon = AppIcons.Timer,
                 title = "Trainingsauswahl",
-                subtitle = "Intervalltrainings erstellen und fahren",
-                modifier = Modifier.weight(1f),
-                onClick = { vm.open(Screen.WORKOUTS) },
-            )
-            MenuTile(
-                emoji = "📈",
-                title = "Verlauf",
-                subtitle = when (rides.size) {
-                    0 -> "Aufgezeichnete Fahrten ansehen und exportieren"
-                    1 -> "1 gespeicherte Fahrt"
-                    else -> "${rides.size} gespeicherte Fahrten"
+                subtitle = if (firstWorkout == null) {
+                    "Intervalltraining anlegen und fahren"
+                } else if (workouts.size == 1) {
+                    firstWorkout.name + " · " + formatMs(firstWorkout.totalSeconds())
+                } else {
+                    "${workouts.size} Trainings, zuerst " + firstWorkout.name
                 },
                 modifier = Modifier.weight(1f),
+                onClick = { vm.open(Screen.WORKOUTS) },
+            ) {
+                if (firstWorkout != null) {
+                    WorkoutChart(firstWorkout.phases(), Modifier.fillMaxWidth().height(32.dp))
+                }
+            }
+            MenuRow(
+                icon = AppIcons.Chart,
+                title = "Verlauf",
+                subtitle = if (lastRide == null) {
+                    "Noch keine Fahrt gespeichert"
+                } else {
+                    "Zuletzt " + formatMs(lastRide.durationSec) + " · " +
+                        String.format(Locale.GERMANY, "%.1f", lastRide.distanceM / 1000.0) + " km" +
+                        (lastRide.avgPower?.let { " · Ø $it W" } ?: "")
+                },
                 onClick = { vm.openHistory() },
             )
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-            ) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 TextButton(onClick = { vm.toggleTheme() }) {
-                    Text(if (light) "Design: hell" else "Design: dunkel")
+                    Text(
+                        if (light) "Design: hell" else "Design: dunkel",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
                 TextButton(onClick = { vm.toggleKeepScreenOn() }) {
-                    Text(if (screenOn) "Bildschirm bleibt an" else "Bildschirm darf ausgehen")
+                    Text(
+                        if (screenOn) "Bildschirm bleibt an" else "Bildschirm darf ausgehen",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
         }
@@ -243,31 +283,71 @@ fun HomeScreen(vm: Engine, requestPermissions: () -> Unit, enableBluetooth: () -
 }
 
 @Composable
+private fun MenuHeader(icon: ImageVector, title: String, subtitle: String, titleSize: Int) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            icon,
+            contentDescription = null,
+            modifier = Modifier.size(24.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(title, fontSize = titleSize.sp, lineHeight = (titleSize + 6).sp, fontWeight = FontWeight.Medium)
+            Text(
+                subtitle,
+                fontSize = 14.sp,
+                lineHeight = 20.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Icon(
+            AppIcons.Chevron,
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+            tint = MaterialTheme.colorScheme.outline,
+        )
+    }
+}
+
+/** Kompakte Menüzeile mit aktuellem Stand. */
+@Composable
+private fun MenuRow(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = 80.dp)
+            .card()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.Center,
+    ) {
+        MenuHeader(icon, title, subtitle, titleSize = 18)
+    }
+}
+
+/** Große Menükachel; [moment] zeigt unten etwas Echtes aus der App. */
+@Composable
 private fun MenuTile(
-    emoji: String,
+    icon: ImageVector,
     title: String,
     subtitle: String,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
+    moment: @Composable () -> Unit,
 ) {
-    Row(
-        modifier = modifier
+    Column(
+        modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(28.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .card()
             .clickable(onClick = onClick)
-            .padding(horizontal = 24.dp, vertical = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(20.dp),
+        verticalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text(emoji, fontSize = 40.sp)
-        Spacer(Modifier.width(20.dp))
-        Column {
-            Text(title, fontSize = 26.sp, fontWeight = FontWeight.Bold)
-            Text(
-                subtitle,
-                fontSize = 15.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+        MenuHeader(icon, title, subtitle, titleSize = 24)
+        moment()
     }
 }
