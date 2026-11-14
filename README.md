@@ -20,6 +20,19 @@ steuert den Widerstand im ERG-Modus und bietet **Geräte**, **Freie Fahrt** (21 
 - **Pulsmesser:** Brustgurte, Armbänder und Uhren mit Bluetooth-Herzfrequenz lassen sich
   zusätzlich zum Trainer verbinden.
 
+## Version 2.2 – Tablet, Querformat, einstellbare Stufen
+
+- **Tablet:** Alle Bildschirme nutzen die volle Fläche – zwei Bereiche nebeneinander,
+  mehrspaltige Listen, größere Zahlen und Bedienelemente.
+- **Querformat:** Die App lässt sich drehen, auch auf dem Handy. Quer stehen z. B. Live-Werte
+  und Steuerung nebeneinander; der Editor zeigt das Trainingsprofil dauerhaft neben den
+  Einstellungen.
+- **Handy hochkant:** unverändert, bis auf das neue Einstellungs-Symbol unten rechts im Hauptmenü.
+- **Stufen der Freien Fahrt:** Anzahl der Stufen (5–40) und Leistung der höchsten Stufe
+  (100–1500 W) sind einstellbar – im Hauptmenü unten rechts über das Regler-Symbol. Stufe 0
+  bleibt Leerlauf, die Stufen steigen linear und werden auf 5 W gerundet. Standard: 20 Stufen
+  bis 550 W.
+
 ## Version 2.1 – überarbeitete Oberfläche
 
 Die Oberfläche wurde nach der Methode [unslop](https://github.com/heydamir/unslop) von
@@ -50,7 +63,8 @@ Der Weg zurück von 2.0 auf 1.0 erfordert, die App vorher zu deinstallieren (And
 kein Herabstufen); dabei gehen die gespeicherten Daten verloren.
 
 > **Stand:** Die APK wird per GitHub Actions gebaut; FIT- und TCX-Export sind mit unabhängigen
-> Lesern geprüft, die Bildschirme von 2.1 wurden als Bilder gerendert und durchgesehen.
+> Lesern geprüft, die Bildschirme wurden für Handy und Tablet in beiden Ausrichtungen als
+> Bilder gerendert und durchgesehen.
 > Ein Test am echten Trainer, mit Pulsmesser und im Standby steht noch aus.
 
 ---
@@ -97,7 +111,8 @@ und zur Korrektur weitergeben.
 - **Geräte:** „Neues Gerät hinzufügen“ → Trainer antippen → wird verbunden und gespeichert.
   Danach verbindet sich die App beim Start automatisch mit dem zuletzt genutzten Gerät.
   Findet der Scan nichts, „Alle Bluetooth-Geräte anzeigen“ aktivieren.
-- **Freie Fahrt:** Countdown, dann Stufe 0 (Leerlauf). Mit „–“/„+“ in 21 Stufen bis 550 W.
+- **Freie Fahrt:** Countdown, dann Stufe 0 (Leerlauf). Mit „–“/„+“ durch die Stufen
+  (Standard: 20 Stufen bis 550 W, einstellbar).
 - **Trainingsauswahl:** Vorlagen anlegen (Aufwärmen, Intervall, Pause, Wiederholungen,
   optional Ausfahren), speichern, starten, duplizieren, löschen.
 - **Pulsmesser:** Unter „Geräte“ auf „＋ Pulsmesser“ tippen. Bei Uhren vorher

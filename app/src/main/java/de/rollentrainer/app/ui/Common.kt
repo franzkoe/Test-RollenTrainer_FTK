@@ -399,13 +399,16 @@ fun MetricTile(
     Column(
         modifier = modifier
             .card()
-            .padding(horizontal = if (compact) 12.dp else 16.dp, vertical = 12.dp),
+            .padding(
+                horizontal = if (large) 20.dp else if (compact) 12.dp else 16.dp,
+                vertical = if (large) 20.dp else 12.dp,
+            ),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Text(
             // In der schmalen Kachel passt das lange Wort nicht
             if (compact && m.label == "Geschwindigkeit") "Geschw." else m.label,
-            fontSize = if (large) 15.sp else 13.sp,
+            fontSize = if (large) 16.sp else 13.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -413,7 +416,7 @@ fun MetricTile(
         Row(verticalAlignment = Alignment.Bottom) {
             Text(
                 m.value,
-                fontSize = if (large) 52.sp else if (compact) 24.sp else 36.sp,
+                fontSize = if (large) 64.sp else if (compact) 24.sp else 36.sp,
                 fontWeight = FontWeight.Medium,
                 style = Tnum,
                 maxLines = 1,
@@ -426,7 +429,7 @@ fun MetricTile(
                     color = MaterialTheme.colorScheme.outline,
                     maxLines = 1,
                     modifier = Modifier.padding(
-                        bottom = if (large) 8.dp else if (compact) 4.dp else 6.dp
+                        bottom = if (large) 12.dp else if (compact) 4.dp else 6.dp
                     ),
                 )
             }

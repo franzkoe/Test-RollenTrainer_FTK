@@ -214,7 +214,7 @@ fun HomeScreen(vm: Engine, requestPermissions: () -> Unit, enableBluetooth: () -
     val config by vm.levelConfig.collectAsState()
     val w = win()
     // Höhe des „Moments“ in den großen Kacheln
-    val moment = if (w.tablet) 64.dp else 32.dp
+    val moment = if (!w.tablet) 32.dp else if (w.landscape) 140.dp else 200.dp
 
     val devicesRow: @Composable () -> Unit = {
         MenuRow(
@@ -237,6 +237,7 @@ fun HomeScreen(vm: Engine, requestPermissions: () -> Unit, enableBluetooth: () -
                 "${config.watts(config.levels)} W",
             modifier = modifier,
             dense = w.short,
+            big = w.tablet,
             onClick = { vm.openFreeRide() },
         ) {
             LevelScale(level = config.levels, config = config, height = moment)
@@ -255,6 +256,7 @@ fun HomeScreen(vm: Engine, requestPermissions: () -> Unit, enableBluetooth: () -
             },
             modifier = modifier,
             dense = w.short,
+            big = w.tablet,
             onClick = { vm.open(Screen.WORKOUTS) },
         ) {
             // Ohne gespeichertes Training: das Profil, mit dem ein neues Training beginnt
@@ -359,12 +361,13 @@ private fun MenuHeader(
     subtitle: String,
     titleSize: Int,
     oneLine: Boolean = false,
+    big: Boolean = false,
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(
             icon,
             contentDescription = null,
-            modifier = Modifier.size(24.dp),
+            modifier = Modifier.size(if (big) 32.dp else 24.dp),
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.width(16.dp))
@@ -372,8 +375,8 @@ private fun MenuHeader(
             Text(title, fontSize = titleSize.sp, lineHeight = (titleSize + 6).sp, fontWeight = FontWeight.Medium)
             Text(
                 subtitle,
-                fontSize = 14.sp,
-                lineHeight = 20.sp,
+                fontSize = if (big) 17.sp else 14.sp,
+                lineHeight = if (big) 24.sp else 20.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = if (oneLine) 1 else 2,
                 overflow = TextOverflow.Ellipsis,
@@ -401,7 +404,8 @@ private fun MenuRow(icon: ImageVector, title: String, subtitle: String, onClick:
             .padding(horizontal = 20.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.Center,
     ) {
-        MenuHeader(icon, title, subtitle, titleSize = 18)
+        val big = win().tablet
+        MenuHeader(icon, title, subtitle, titleSize = if (big) 22 else 18, big = big)
     }
 }
 
@@ -413,6 +417,7 @@ private fun MenuTile(
     subtitle: String,
     modifier: Modifier = Modifier,
     dense: Boolean = false,
+    big: Boolean = false,
     onClick: () -> Unit,
     moment: @Composable () -> Unit,
 ) {
@@ -421,10 +426,15 @@ private fun MenuTile(
             .fillMaxWidth()
             .card()
             .clickable(onClick = onClick)
-            .padding(if (dense) 16.dp else 20.dp),
+            .padding(if (dense) 16.dp else if (big) 32.dp else 20.dp),
         verticalArrangement = Arrangement.SpaceBetween,
     ) {
-        MenuHeader(icon, title, subtitle, titleSize = if (dense) 20 else 24, oneLine = dense)
+        MenuHeader(
+            icon, title, subtitle,
+            titleSize = if (dense) 20 else if (big) 32 else 24,
+            oneLine = dense,
+            big = big,
+        )
         moment()
     }
 }

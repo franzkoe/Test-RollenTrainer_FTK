@@ -526,18 +526,27 @@ fun WorkoutRunScreen(vm: Engine) {
                         Modifier.fillMaxSize().padding(horizontal = w.gutter).padding(bottom = 8.dp),
                         horizontalArrangement = Arrangement.spacedBy(if (big) 24.dp else 16.dp),
                     ) {
-                        Column(
-                            Modifier.weight(1f).verticalScroll(rememberScrollState()),
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            PhasePanel(run, big)
-                            RunButtons(run, big, onPause = { vm.togglePause() }, onEnd = { askEnd = true })
+                        if (big) {
+                            // Tablet: Phase oben, Bedienung unten am Rand der linken Hälfte
+                            Column(Modifier.weight(1f).fillMaxSize().padding(bottom = 8.dp)) {
+                                PhasePanel(run, true)
+                                Spacer(Modifier.weight(1f))
+                                RunButtons(run, true, onPause = { vm.togglePause() }, onEnd = { askEnd = true })
+                            }
+                        } else {
+                            Column(
+                                Modifier.weight(1f).verticalScroll(rememberScrollState()),
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                PhasePanel(run, false)
+                                RunButtons(run, false, onPause = { vm.togglePause() }, onEnd = { askEnd = true })
+                            }
                         }
                         Column(
                             Modifier.weight(1f).verticalScroll(rememberScrollState()),
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
-                            ProgressPanel(run, chartHeight = if (big) 120.dp else 56.dp)
+                            ProgressPanel(run, chartHeight = if (big) 88.dp else 56.dp)
                             if (big) {
                                 MetricGrid(metrics, columns = 2, compact = false, large = true)
                             } else {
@@ -605,9 +614,9 @@ private fun PhasePanel(run: RunUi, big: Boolean = false) {
     Column(Modifier.fillMaxWidth().card()) {
       Box(Modifier.fillMaxWidth().height(8.dp).background(color))
       Column(
-        Modifier.fillMaxWidth().padding(16.dp),
+        Modifier.fillMaxWidth().padding(if (big) 32.dp else 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(if (big) 16.dp else 8.dp),
       ) {
         AnimatedContent(
             targetState = if (run.paused) "Pausiert" else phase.label,
@@ -619,8 +628,8 @@ private fun PhasePanel(run: RunUi, big: Boolean = false) {
         ) { label ->
             Text(
                 label,
-                fontSize = if (big) 36.sp else 24.sp,
-                lineHeight = if (big) 44.sp else 30.sp,
+                fontSize = if (big) 40.sp else 24.sp,
+                lineHeight = if (big) 48.sp else 30.sp,
                 fontWeight = FontWeight.Medium,
                 textAlign = TextAlign.Center,
             )
@@ -638,12 +647,14 @@ private fun PhasePanel(run: RunUi, big: Boolean = false) {
                 Text(
                     if (phase.watts == 0) "Leerlauf" else "${phase.watts} W",
                     fontSize = if (big) {
-                        if (phase.watts == 0) 56.sp else 88.sp
+                        if (phase.watts == 0) 56.sp else 80.sp
                     } else {
                         if (phase.watts == 0) 32.sp else 44.sp
                     },
                     fontWeight = FontWeight.SemiBold,
                     style = Tnum,
+                    maxLines = 1,
+                    softWrap = false,
                 )
             }
             Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -654,9 +665,11 @@ private fun PhasePanel(run: RunUi, big: Boolean = false) {
                 )
                 Text(
                     formatMs(run.phaseRemainingSec),
-                    fontSize = if (big) 88.sp else 44.sp,
+                    fontSize = if (big) 80.sp else 44.sp,
                     fontWeight = FontWeight.SemiBold,
                     style = Tnum,
+                    maxLines = 1,
+                    softWrap = false,
                 )
             }
         }
