@@ -546,7 +546,7 @@ fun WorkoutRunScreen(vm: Engine) {
                             Modifier.weight(1f).verticalScroll(rememberScrollState()),
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
-                            ProgressPanel(run, chartHeight = if (big) 120.dp else 56.dp)
+                            ProgressPanel(run, chartHeight = if (big) 88.dp else 56.dp)
                             if (big) {
                                 MetricGrid(metrics, columns = 2, compact = false, large = true)
                             } else {
@@ -647,12 +647,14 @@ private fun PhasePanel(run: RunUi, big: Boolean = false) {
                 Text(
                     if (phase.watts == 0) "Leerlauf" else "${phase.watts} W",
                     fontSize = if (big) {
-                        if (phase.watts == 0) 64.sp else 104.sp
+                        if (phase.watts == 0) 56.sp else 80.sp
                     } else {
                         if (phase.watts == 0) 32.sp else 44.sp
                     },
                     fontWeight = FontWeight.SemiBold,
                     style = Tnum,
+                    maxLines = 1,
+                    softWrap = false,
                 )
             }
             Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -663,9 +665,11 @@ private fun PhasePanel(run: RunUi, big: Boolean = false) {
                 )
                 Text(
                     formatMs(run.phaseRemainingSec),
-                    fontSize = if (big) 104.sp else 44.sp,
+                    fontSize = if (big) 80.sp else 44.sp,
                     fontWeight = FontWeight.SemiBold,
                     style = Tnum,
+                    maxLines = 1,
+                    softWrap = false,
                 )
             }
         }
