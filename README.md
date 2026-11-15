@@ -22,6 +22,32 @@ und **Verlauf** (aufgezeichnete Fahrten).
 - **Pulsmesser:** Brustgurte, Armbänder und Uhren mit Bluetooth-Herzfrequenz lassen sich
   zusätzlich zum Trainer verbinden.
 
+## Version 2.5 – Dashboard, Erholung, gesammelte Einstellungen
+
+- **Startmenü:** Alle Menüpunkte haben dieselbe Form und Größe: Geräte, Freie Fahrt,
+  Trainingsauswahl, Mein Trainingsplan, Dashboard, Verlauf, Einstellungen.
+- **Dashboard (eigener Menüpunkt):** zeigt, ob du besser wirst. Grundlage sind drei Vergleiche:
+  **Fitness** (durchschnittliche Belastung der letzten sechs Wochen, heute gegen vor vier
+  Wochen), **Watt pro Puls** (letzte vier Wochen gegen die vier davor) und **beste 20 Minuten**
+  (letzte sechs Wochen gegen die sechs davor). Dazu der Verlauf von Fitness und Ermüdung über
+  zwölf Wochen und die Form (Fitness minus Ermüdung). Das Urteil steht auch schon im Startmenü.
+- **Erholungswerte:** Ruhepuls, HRV, Schlaf und Gefühl von Hand eintragen oder als CSV-Datei
+  importieren (Spalten Datum, Ruhepuls, HRV, Schlaf, Gefühl). Die App vergleicht sie mit deinem
+  Schnitt der letzten vier Wochen. Sind sie schwach, weist der Trainingsplan bei der leichteren
+  Alternative darauf hin.
+- **VO2max:** Schätzung von Hand eintragen, mit Verlauf.
+- **Profil:** auch aus dem Dashboard erreichbar. Es ist dasselbe Profil wie im Trainingsplan.
+- **Einstellungen:** alles an einer Stelle (Stufen, Analyse, Design, Bildschirm, Ton und
+  Vibration, Profil, Geräte, KI-Dienst, Akku). Auch aus der Freien Fahrt erreichbar (unten
+  links), die Fahrt läuft währenddessen weiter.
+- **Freie Fahrt speichern:** Die App fragt, ob die Fahrt für Trainingsplan und Analyse verwendet
+  werden soll. In den Einstellungen lässt sich „immer“ oder „nie“ festlegen, und jede Fahrt
+  lässt sich im Verlauf nachträglich ein- oder ausschließen.
+
+**Wie die Belastung berechnet wird:** wie der übliche Training Stress Score. Mit FTP aus der
+gewichteten Leistung (eine Stunde an der FTP ergibt 100), ohne FTP aus der Zeit in den
+Pulszonen. Fitness ist der gleitende Schnitt über 42 Tage, Ermüdung über 7 Tage.
+
 ## Version 2.4 – Schwerpunkt und Watt pro kg
 
 - **Schwerpunkt für jeden Plan:** Beim Start eines fertigen oder eigenen Plans wählst du, welche

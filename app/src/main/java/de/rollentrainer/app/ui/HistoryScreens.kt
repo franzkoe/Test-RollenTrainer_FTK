@@ -43,6 +43,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.Checkbox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -285,6 +286,10 @@ fun SummaryScreen(vm: Engine) {
     val p = pending
     val w = win()
     val planNote by vm.planNote.collectAsState()
+    val free by vm.pendingFree.collectAsState()
+    val analysisMode by vm.analysisMode.collectAsState()
+    val planState by vm.planState.collectAsState()
+    var askUse by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize()) {
         TopBar("Einheit beendet", conn)
         if (p != null) {
@@ -322,10 +327,63 @@ fun SummaryScreen(vm: Engine) {
                 )
             }
             Button(
-                onClick = { vm.savePending() },
+                onClick = {
+                    // Freie Fahrt: je nach Einstellung fragen, immer oder nie für die Analyse verwenden
+                    if (!free) vm.savePending()
+                    else when (analysisMode) {
+                        1 -> vm.savePending(useForAnalysis = true)
+                        2 -> vm.savePending(useForAnalysis = false)
+                        else -> askUse = true
+                    }
+                },
                 modifier = Modifier.weight(1f).height(56.dp),
             ) { Text("Speichern", fontSize = 18.sp, fontWeight = FontWeight.Medium) }
         }
+    }
+
+    if (askUse) {
+        val st = planState
+        val next = st?.next()
+        var forPlan by remember { mutableStateOf(false) }
+        AlertDialog(
+            onDismissRequest = { askUse = false },
+            title = { Text("Für Trainingsplan und Analyse verwenden?") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        "Soll diese Freie Fahrt in die Analyse im Dashboard einfließen? " +
+                            "Gespeichert wird sie in jedem Fall.",
+                        fontSize = 16.sp,
+                    )
+                    if (st != null && next != null) {
+                        Row(
+                            Modifier.fillMaxWidth().clickable { forPlan = !forPlan },
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Checkbox(checked = forPlan, onCheckedChange = { forPlan = it })
+                            Text(
+                                "Auch als nächste Einheit im Trainingsplan eintragen (statt „" +
+                                    st.plan.weeks[next.first][next.second].name + "“)",
+                                fontSize = 14.sp,
+                                lineHeight = 20.sp,
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    askUse = false
+                    vm.savePending(useForAnalysis = true, forPlan = forPlan)
+                }) { Text("Ja, verwenden") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    askUse = false
+                    vm.savePending(useForAnalysis = false)
+                }) { Text("Nein, nur speichern") }
+            },
+        )
     }
 
     if (askDiscard) {
@@ -452,6 +510,11 @@ fun RideDetailScreen(
                 )
             }
             val manage: @Composable () -> Unit = {
+                SwitchRow(
+                    "Für Analyse verwenden",
+                    "Fließt in Fitness-Verlauf und Vergleiche im Dashboard ein",
+                    d.summary.analysis,
+                ) { vm.setRideAnalysis(it) }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     TextButton(onClick = { showRename = true }) {
                         Text("Umbenennen", color = MaterialTheme.colorScheme.onSurfaceVariant)

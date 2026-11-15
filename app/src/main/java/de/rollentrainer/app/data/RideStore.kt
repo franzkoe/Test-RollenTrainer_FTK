@@ -146,6 +146,12 @@ class RideStore(context: Context) {
         .putOpt2("maxHr", s.maxHr)
         .putOpt2("avgCadence", s.avgCadence)
         .putOpt2("kcal", s.kcal)
+        .put("analysis", s.analysis)
+        .putOpt2("np", s.np)
+        .putOpt2("best5", s.best5)
+        .putOpt2("best20", s.best20)
+        .putOpt2("load", s.load)
+        .put("metrics", s.metrics)
 
     private fun parseSummary(o: JSONObject) = RideSummary(
         id = o.getString("id"),
@@ -161,6 +167,12 @@ class RideStore(context: Context) {
         maxHr = o.intOrNull("maxHr"),
         avgCadence = o.intOrNull("avgCadence"),
         kcal = o.intOrNull("kcal"),
+        analysis = o.optBoolean("analysis", true),
+        np = if (o.has("np")) o.intOrNull("np") else null,
+        best5 = if (o.has("best5")) o.intOrNull("best5") else null,
+        best20 = if (o.has("best20")) o.intOrNull("best20") else null,
+        load = if (o.has("load")) o.intOrNull("load") else null,
+        metrics = o.optBoolean("metrics", false),
     )
 
     private fun samplesToJson(samples: List<Sample>): JSONObject {

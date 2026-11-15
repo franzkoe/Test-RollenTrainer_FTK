@@ -40,6 +40,13 @@ import de.rollentrainer.app.data.AiConfig
 import de.rollentrainer.app.data.AiException
 import de.rollentrainer.app.data.Done
 import de.rollentrainer.app.data.ExportFormat
+import de.rollentrainer.app.data.Recovery
+import de.rollentrainer.app.data.Vo2
+import de.rollentrainer.app.data.epochDay
+import de.rollentrainer.app.data.mergeRecovery
+import de.rollentrainer.app.data.mergeVo2
+import de.rollentrainer.app.data.parseRecoveryCsv
+import de.rollentrainer.app.data.withMetrics
 import de.rollentrainer.app.data.Focus
 import de.rollentrainer.app.data.PlanSpec
 import de.rollentrainer.app.data.PlanState
@@ -92,6 +99,7 @@ import kotlin.math.roundToInt
 enum class Screen {
     HOME, DEVICES, SETTINGS, FREE_RIDE, WORKOUTS, EDITOR, WORKOUT_RUN, SUMMARY, HISTORY, RIDE_DETAIL,
     PLAN, PLAN_NEW, PLAN_PROFILE, PLAN_AI,
+    DASHBOARD, SETTINGS_LEVELS,
 }
 
 /** countdown: 3, 2, 1, 0 (= „Start!“), null = Fahrt läuft. */
@@ -116,6 +124,10 @@ data class RunUi(
     val manual: Boolean = false,
     val level: Int = 0,
 )
+
+/** Bildschirme, die von mehreren Stellen aus geöffnet werden; „Zurück“ führt zum Ursprung. */
+private val RETURNING =
+    setOf(Screen.SETTINGS, Screen.PLAN_PROFILE, Screen.PLAN_AI, Screen.DEVICES, Screen.DASHBOARD)
 
 /** Stand der KI-Anfrage: läuft, Antworttext, Fehler und ggf. die vorgeschlagene Einheit. */
 data class AiUi(
@@ -205,6 +217,34 @@ class Engine private constructor(private val app: Context) {
         store.devices.stateIn(scope, SharingStarted.Eagerly, emptyList())
     val workouts: StateFlow<List<Workout>> =
         store.workouts.stateIn(scope, SharingStarted.Eagerly, emptyList())
+
+    // ---- Dashboard ----
+    val recovery: StateFlow<List<Recovery>> =
+        store.recovery.stateIn(scope, SharingStarted.Eagerly, emptyList())
+    val vo2: StateFlow<List<Vo2>> =
+        store.vo2.stateIn(scope, SharingStarted.Eagerly, emptyList())
+
+    /** Ton und Vibration bei Start und Phasenwechsel. */
+    val signals: StateFlow<Boolean> =
+        store.signals.stateIn(scope, SharingStarted.Eagerly, true)
+
+    /** Freie Fahrten für die Analyse: 0 = fragen, 1 = immer, 2 = nie. */
+    val analysisMode: StateFlow<Int> =
+        store.analysisMode.stateIn(scope, SharingStarted.Eagerly, 0)
+
+    /** Rückmeldung nach einem Import der Erholungswerte. */
+    private val _importNote = MutableStateFlow<String?>(null)
+    val importNote: StateFlow<String?> = _importNote
+
+    /** Die gerade beendete Einheit war eine Freie Fahrt (Abfrage beim Speichern). */
+    private val _pendingFree = MutableStateFlow(false)
+    val pendingFree: StateFlow<Boolean> = _pendingFree
+
+    /** Läuft gerade eine Freie Fahrt (auch wenn ein anderer Bildschirm offen ist)? */
+    private var freeRide = false
+
+    /** Von wo ein Unterbildschirm geöffnet wurde, damit „Zurück“ dorthin führt. */
+    private val openedFrom = HashMap<Screen, Screen>()
 
     // ---- Trainingsplan ----
     val profile: StateFlow<Profile> =
@@ -309,6 +349,7 @@ class Engine private constructor(private val app: Context) {
         scope.launch {
             if (!store.batteryHintShown.first()) _batteryHint.value = true
         }
+        backfillMetrics()
         reloadRides()
         // Nicht gespeicherte Fahrt aus einem früheren App-Lauf wiederherstellen
         scope.launch {
@@ -321,6 +362,7 @@ class Engine private constructor(private val app: Context) {
             val summary = summarize(
                 UUID.randomUUID().toString(), draft.name, draft.samples, draft.kcal
             )
+            _pendingFree.value = draft.name == "Freie Fahrt"
             _pending.value = RideDetail(summary, draft.samples)
             if (_screen.value == Screen.HOME) _screen.value = Screen.SUMMARY
         }
@@ -403,20 +445,31 @@ class Engine private constructor(private val app: Context) {
 
     fun open(screen: Screen) {
         _needTrainer.value = false
+        // Diese Bildschirme sind von mehreren Stellen erreichbar
+        if (screen in RETURNING && _screen.value != screen) openedFrom[screen] = _screen.value
+        if (screen == Screen.DASHBOARD) reloadRides()
         _screen.value = screen
+    }
+
+    private fun returnFrom(screen: Screen, fallback: Screen) {
+        _screen.value = openedFrom.remove(screen) ?: fallback
     }
 
     fun back() {
         when (_screen.value) {
             Screen.DEVICES -> {
                 ble.stopScan()
-                _screen.value = Screen.HOME
+                returnFrom(Screen.DEVICES, Screen.HOME)
             }
 
-            Screen.WORKOUTS, Screen.HISTORY, Screen.SETTINGS, Screen.PLAN ->
-                _screen.value = Screen.HOME
+            Screen.WORKOUTS, Screen.HISTORY, Screen.PLAN -> _screen.value = Screen.HOME
+            Screen.DASHBOARD -> returnFrom(Screen.DASHBOARD, Screen.HOME)
 
-            Screen.PLAN_NEW, Screen.PLAN_PROFILE, Screen.PLAN_AI -> _screen.value = Screen.PLAN
+            Screen.SETTINGS -> returnFrom(Screen.SETTINGS, Screen.HOME)
+            Screen.SETTINGS_LEVELS -> _screen.value = Screen.SETTINGS
+            Screen.PLAN_NEW -> _screen.value = Screen.PLAN
+            Screen.PLAN_PROFILE -> returnFrom(Screen.PLAN_PROFILE, Screen.PLAN)
+            Screen.PLAN_AI -> returnFrom(Screen.PLAN_AI, Screen.PLAN)
             Screen.EDITOR -> _screen.value = Screen.WORKOUTS
             Screen.RIDE_DETAIL -> _screen.value = Screen.HISTORY
             else -> Unit
@@ -505,6 +558,7 @@ class Engine private constructor(private val app: Context) {
     }
 
     private fun signal(long: Boolean = false) {
+        if (!signals.value) return
         try {
             if (tone == null) tone = ToneGenerator(AudioManager.STREAM_MUSIC, 90)
             tone?.startTone(ToneGenerator.TONE_PROP_BEEP, if (long) 600 else 250)
@@ -612,6 +666,9 @@ class Engine private constructor(private val app: Context) {
         sessionRunning = false
         currentTarget = 0
         RideService.stop(app)
+        _pendingFree.value = freeRide
+        freeRide = false
+        openedFrom.clear()
         val pr = planRun
         planRun = null
         returnScreen = if (pr != null) Screen.PLAN else Screen.HOME
@@ -661,21 +718,126 @@ class Engine private constructor(private val app: Context) {
         finishSession()
     }
 
-    fun savePending() {
+    /**
+     * Speichert die beendete Einheit. [useForAnalysis]: Sie zählt für die Dashboard-Analyse.
+     * [forPlan]: Sie wird zusätzlich als nächste Einheit des Trainingsplans eingetragen.
+     */
+    fun savePending(useForAnalysis: Boolean = true, forPlan: Boolean = false) {
         val p = _pending.value
         _pending.value = null
+        _pendingFree.value = false
         _screen.value = returnScreen
         returnScreen = Screen.HOME
         if (p != null) {
+            if (forPlan) {
+                val st = planState.value
+                val next = st?.next()
+                if (st != null && next != null) {
+                    addDone(
+                        Done(
+                            week = next.first,
+                            index = next.second,
+                            status = ST_ALT,
+                            dateMs = System.currentTimeMillis(),
+                            name = p.summary.name,
+                            seconds = p.summary.durationSec,
+                            avgPower = p.summary.avgPower,
+                            avgHr = p.summary.avgHr,
+                        )
+                    )
+                }
+            }
             scope.launch {
-                rideStore.save(p.summary, p.samples)
+                val full = withContext(Dispatchers.Default) {
+                    withMetrics(p.summary, p.samples, store.profile.first())
+                }.copy(analysis = useForAnalysis)
+                rideStore.save(full, p.samples)
                 rideStore.clearDraft()
                 _rides.value = rideStore.list()
             }
         }
     }
 
+    /** Ältere Fahrten ohne Kennzahlen einmalig nachrechnen. */
+    private fun backfillMetrics() {
+        scope.launch {
+            val list = rideStore.list()
+            val open = list.filter { !it.metrics }
+            if (open.isEmpty()) return@launch
+            val profile = store.profile.first()
+            open.forEach { r ->
+                val samples = rideStore.loadSamples(r.id)
+                val full = withContext(Dispatchers.Default) { withMetrics(r, samples, profile) }
+                rideStore.updateSummary(full)
+            }
+            _rides.value = rideStore.list()
+        }
+    }
+
+    /** Geöffnete Fahrt für die Analyse verwenden oder ausnehmen. */
+    fun setRideAnalysis(use: Boolean) {
+        val cur = _detail.value ?: return
+        val next = cur.summary.copy(analysis = use)
+        _detail.value = cur.copy(summary = next)
+        scope.launch {
+            rideStore.updateSummary(next)
+            _rides.value = rideStore.list()
+        }
+    }
+
+    // ------------------------------------------------------------------ Dashboard
+
+    fun today(): Long = epochDay(System.currentTimeMillis())
+
+    /** Erholungswerte eines Tages speichern; ein leerer Eintrag löscht den Tag. */
+    fun saveRecovery(entry: Recovery) {
+        scope.launch { store.setRecovery(mergeRecovery(store.recovery.first(), listOf(entry))) }
+    }
+
+    /** Erholungswerte aus einer CSV-Datei übernehmen. */
+    fun importRecovery(text: String) {
+        scope.launch {
+            val list = withContext(Dispatchers.Default) { parseRecoveryCsv(text) }
+            if (list.isEmpty()) {
+                _importNote.value =
+                    "In der Datei wurden keine Werte gefunden. Erwartet wird eine CSV-Datei " +
+                    "mit den Spalten Datum, Ruhepuls, HRV, Schlaf, Gefühl."
+            } else {
+                store.setRecovery(mergeRecovery(store.recovery.first(), list))
+                _importNote.value =
+                    if (list.size == 1) "1 Tag übernommen" else "${list.size} Tage übernommen"
+            }
+        }
+    }
+
+    fun importFailed() {
+        _importNote.value = "Die Datei konnte nicht gelesen werden."
+    }
+
+    fun dismissImportNote() {
+        _importNote.value = null
+    }
+
+    fun saveVo2(value: Double) {
+        val v = Vo2(today(), Math.round(value * 10) / 10.0)
+        scope.launch { store.setVo2(mergeVo2(store.vo2.first(), v)) }
+    }
+
+    fun deleteVo2(day: Long) {
+        scope.launch { store.setVo2(store.vo2.first().filter { it.day != day }) }
+    }
+
+    fun toggleSignals() {
+        val next = !signals.value
+        scope.launch { store.setSignals(next) }
+    }
+
+    fun setAnalysisMode(mode: Int) {
+        scope.launch { store.setAnalysisMode(mode) }
+    }
+
     fun discardPending() {
+        _pendingFree.value = false
         _pending.value = null
         _screen.value = returnScreen
         returnScreen = Screen.HOME
@@ -686,7 +848,8 @@ class Engine private constructor(private val app: Context) {
     fun notificationText(): Pair<String, String> {
         val power = ble.bike.value.powerW
         val actual = if (power != null) " · Ist $power W" else ""
-        return when (_screen.value) {
+        // Die Freie Fahrt läuft weiter, auch wenn gerade die Einstellungen offen sind
+        return when (if (freeRide) Screen.FREE_RIDE else _screen.value) {
             Screen.FREE_RIDE -> {
                 val r = _ride.value
                 if (r.countdown != null) {
@@ -721,6 +884,7 @@ class Engine private constructor(private val app: Context) {
     fun openFreeRide() {
         if (!requireTrainer()) return
         planRun = null
+        freeRide = true
         _ride.value = RideUi()
         _screen.value = Screen.FREE_RIDE
         prepareSession("Freie Fahrt")

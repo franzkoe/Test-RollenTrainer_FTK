@@ -59,6 +59,23 @@ class MainActivity : ComponentActivity() {
             ActivityResultContracts.CreateDocument("application/octet-stream")
         ) { uri -> writePendingSave(uri) }
 
+    /** Auswahl einer CSV-Datei mit Erholungswerten. */
+    private val importLauncher =
+        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            if (uri != null) {
+                try {
+                    val text = contentResolver.openInputStream(uri)?.use { input ->
+                        // Höchstens 2 MB lesen
+                        val bytes = input.readNBytes(2 * 1024 * 1024)
+                        String(bytes, Charsets.UTF_8)
+                    }
+                    if (text == null) engine.importFailed() else engine.importRecovery(text)
+                } catch (e: Exception) {
+                    engine.importFailed()
+                }
+            }
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         engine = Engine.get(this)
@@ -71,6 +88,13 @@ class MainActivity : ComponentActivity() {
                 openBatterySettings = { openBatterySettings() },
                 onShare = { shareRide(it) },
                 onSave = { saveRide(it) },
+                onImportRecovery = {
+                    try {
+                        importLauncher.launch(arrayOf("*/*"))
+                    } catch (e: Exception) {
+                        engine.importFailed()
+                    }
+                },
             )
         }
         if (savedInstanceState == null && (!engine.permissionsGranted.value || !notificationsGranted())) {

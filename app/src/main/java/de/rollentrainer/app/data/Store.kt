@@ -48,6 +48,10 @@ class Store(private val context: Context) {
     private val keyLevels = stringPreferencesKey("free_ride_levels")
     private val keyMaxWatts = stringPreferencesKey("free_ride_max_watts")
     private val keyProfile = stringPreferencesKey("profile")
+    private val keyRecovery = stringPreferencesKey("recovery")
+    private val keyVo2 = stringPreferencesKey("vo2")
+    private val keySignals = booleanPreferencesKey("signals")
+    private val keyAnalysisMode = stringPreferencesKey("analysis_mode")
     private val keyPlan = stringPreferencesKey("plan")
     private val keyAi = stringPreferencesKey("ai")
 
@@ -67,6 +71,37 @@ class Store(private val context: Context) {
     val lastHr: Flow<String?> = context.dataStore.data.map { it[keyLastHr] }
 
     val keepScreenOn: Flow<Boolean> = context.dataStore.data.map { it[keyScreenOn] ?: true }
+
+    /** Erholungswerte je Tag, neueste zuerst. */
+    val recovery: Flow<List<Recovery>> =
+        context.dataStore.data.map { it[keyRecovery] }.distinctUntilChanged().map { parseRecovery(it) }
+
+    suspend fun setRecovery(list: List<Recovery>) {
+        context.dataStore.edit { it[keyRecovery] = recoveryToJson(list) }
+    }
+
+    /** Von Hand eingetragene VO2max-Werte, neueste zuerst. */
+    val vo2: Flow<List<Vo2>> =
+        context.dataStore.data.map { it[keyVo2] }.distinctUntilChanged().map { parseVo2(it) }
+
+    suspend fun setVo2(list: List<Vo2>) {
+        context.dataStore.edit { it[keyVo2] = vo2ToJson(list) }
+    }
+
+    /** Ton und Vibration bei Start und Phasenwechsel. */
+    val signals: Flow<Boolean> = context.dataStore.data.map { it[keySignals] ?: true }
+
+    suspend fun setSignals(on: Boolean) {
+        context.dataStore.edit { it[keySignals] = on }
+    }
+
+    /** Freie Fahrten für die Analyse verwenden: 0 = jedes Mal fragen, 1 = immer, 2 = nie. */
+    val analysisMode: Flow<Int> =
+        context.dataStore.data.map { (it[keyAnalysisMode]?.toIntOrNull() ?: 0).coerceIn(0, 2) }
+
+    suspend fun setAnalysisMode(mode: Int) {
+        context.dataStore.edit { it[keyAnalysisMode] = mode.coerceIn(0, 2).toString() }
+    }
 
     /** Trainingsprofil: FTP bzw. Pulszonen. */
     val profile: Flow<Profile> =

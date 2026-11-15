@@ -67,6 +67,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import de.rollentrainer.app.Engine
+import de.rollentrainer.app.Screen
 import de.rollentrainer.app.data.LevelConfig
 
 @Composable
@@ -110,6 +111,7 @@ fun FreeRideScreen(vm: Engine) {
                         } else {
                             MetricGrid(metrics, columns = 3, compact = true)
                         }
+                        SettingsLink(vm)
                     }
                     if (w.tablet) {
                         // Tablet: Steuerung mittig in der rechten Hälfte, gut erreichbar
@@ -144,6 +146,7 @@ fun FreeRideScreen(vm: Engine) {
                         MetricGrid(metrics, columns = 2, compact = false)
                     }
                     LevelControl(ride.level, config, big = w.tablet, onChange = { vm.changeLevel(it) })
+                    SettingsLink(vm)
                 }
             }
         }
@@ -169,6 +172,23 @@ fun FreeRideScreen(vm: Engine) {
                 ) { Text("Nein", fontSize = 18.sp) }
             },
         )
+    }
+}
+
+/** Unten links: Einstellungen. Die Fahrt läuft währenddessen weiter. */
+@Composable
+private fun SettingsLink(vm: Engine) {
+    Row(Modifier.fillMaxWidth()) {
+        TextButton(onClick = { vm.open(Screen.SETTINGS) }) {
+            Icon(
+                AppIcons.Sliders,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.width(8.dp))
+            Text("Einstellungen", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }
 

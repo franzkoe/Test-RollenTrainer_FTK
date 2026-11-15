@@ -121,6 +121,14 @@ data class RideSummary(
     val maxHr: Int?,
     val avgCadence: Int?,
     val kcal: Int?,
+    /** Für Dashboard-Analyse und Trainingsplan verwenden. */
+    val analysis: Boolean = true,
+    /** Kennzahlen für die Analyse, siehe Analysis.kt; [metrics] = bereits berechnet. */
+    val np: Int? = null,
+    val best5: Int? = null,
+    val best20: Int? = null,
+    val load: Int? = null,
+    val metrics: Boolean = false,
 )
 
 fun summarize(id: String, name: String, samples: List<Sample>, kcal: Int?): RideSummary {

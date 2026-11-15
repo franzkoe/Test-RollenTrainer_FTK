@@ -59,7 +59,9 @@ import de.rollentrainer.app.ble.ConnState
 import de.rollentrainer.app.data.ExportFormat
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import de.rollentrainer.app.data.Workout
+import androidx.compose.runtime.remember
+import de.rollentrainer.app.data.improvement
+import de.rollentrainer.app.data.verdictText
 import java.util.Locale
 
 @Composable
@@ -70,6 +72,7 @@ fun App(
     openBatterySettings: () -> Unit,
     onShare: (ExportFormat) -> Unit,
     onSave: (ExportFormat) -> Unit,
+    onImportRecovery: () -> Unit = {},
 ) {
     val light by vm.lightTheme.collectAsState()
     RollentrainerTheme(light) {
@@ -80,7 +83,9 @@ fun App(
                     when (s) {
                         Screen.HOME -> HomeScreen(vm, requestPermissions, enableBluetooth)
                         Screen.DEVICES -> DevicesScreen(vm, requestPermissions, enableBluetooth)
-                        Screen.SETTINGS -> LevelSettingsScreen(vm)
+                        Screen.SETTINGS -> SettingsScreen(vm, openBatterySettings)
+                        Screen.SETTINGS_LEVELS -> LevelSettingsScreen(vm)
+                        Screen.DASHBOARD -> DashboardScreen(vm, onImportRecovery)
                         Screen.FREE_RIDE -> FreeRideScreen(vm)
                         Screen.WORKOUTS -> WorkoutListScreen(vm)
                         Screen.EDITOR -> WorkoutEditorScreen(vm)
@@ -207,174 +212,128 @@ fun HomeScreen(vm: Engine, requestPermissions: () -> Unit, enableBluetooth: () -
     val connAddress by vm.connectedAddress.collectAsState()
     val devices by vm.devices.collectAsState()
     val workouts by vm.workouts.collectAsState()
-    val light by vm.lightTheme.collectAsState()
-    val screenOn by vm.keepScreenOn.collectAsState()
     val rides by vm.rides.collectAsState()
+    val planState by vm.planState.collectAsState()
+    val config by vm.levelConfig.collectAsState()
+    val w = win()
 
     val trainerName = devices.firstOrNull { it.address == connAddress }?.name
     val firstWorkout = workouts.firstOrNull()
     val lastRide = rides.firstOrNull()
+    val today = vm.today()
+    val trend = remember(rides, today) { improvement(rides, today) }
+    val plan = planState
+    val next = plan?.next()
 
-    val config by vm.levelConfig.collectAsState()
-    val w = win()
-    // Höhe des „Moments“ in den großen Kacheln
-    val moment = if (!w.tablet) 32.dp else if (w.landscape) 140.dp else 200.dp
-
-    val devicesRow: @Composable () -> Unit = {
-        MenuRow(
-            icon = AppIcons.Bluetooth,
-            title = "Geräte",
-            subtitle = when (conn) {
+    // Alle Menüpunkte sehen gleich aus und sind gleich groß
+    val items = listOf(
+        MenuItem(
+            AppIcons.Bluetooth, "Geräte",
+            when (conn) {
                 ConnState.READY -> (trainerName ?: "Trainer") + " verbunden"
                 ConnState.CONNECTING -> "Verbindung zu " + (trainerName ?: "Trainer") + " wird aufgebaut"
                 ConnState.DISCONNECTED ->
                     if (devices.isEmpty()) "Trainer suchen und verbinden" else "Kein Trainer verbunden"
             },
-            onClick = { vm.open(Screen.DEVICES) },
-        )
-    }
-    val freeRideTile: @Composable (Modifier) -> Unit = { modifier ->
-        MenuTile(
-            icon = AppIcons.Bike,
-            title = "Freie Fahrt",
-            subtitle = "Widerstand in ${config.levels + 1} Stufen, von Leerlauf bis " +
-                "${config.watts(config.levels)} W",
-            modifier = modifier,
-            dense = w.short,
-            big = w.tablet,
-            onClick = { vm.openFreeRide() },
-        ) {
-            LevelScale(level = config.levels, config = config, height = moment)
-        }
-    }
-    val workoutTile: @Composable (Modifier) -> Unit = { modifier ->
-        MenuTile(
-            icon = AppIcons.Timer,
-            title = "Trainingsauswahl",
-            subtitle = if (firstWorkout == null) {
+        ) { vm.open(Screen.DEVICES) },
+        MenuItem(
+            AppIcons.Bike, "Freie Fahrt",
+            "${config.levels + 1} Stufen, von Leerlauf bis ${config.watts(config.levels)} W",
+        ) { vm.openFreeRide() },
+        MenuItem(
+            AppIcons.Timer, "Trainingsauswahl",
+            if (firstWorkout == null) {
                 "Intervalltraining anlegen und fahren"
             } else if (workouts.size == 1) {
                 firstWorkout.name + " · " + formatMs(firstWorkout.totalSeconds())
             } else {
                 "${workouts.size} Trainings, zuerst " + firstWorkout.name
             },
-            modifier = modifier,
-            dense = w.short,
-            big = w.tablet,
-            onClick = { vm.open(Screen.WORKOUTS) },
-        ) {
-            // Ohne gespeichertes Training: das Profil, mit dem ein neues Training beginnt
-            val preview = firstWorkout ?: Workout(id = "", name = "")
-            WorkoutChart(preview.phases(), Modifier.fillMaxWidth().height(moment))
-        }
-    }
-    val planState by vm.planState.collectAsState()
-    val planRow: @Composable () -> Unit = {
-        val st = planState
-        val next = st?.next()
-        MenuRow(
-            icon = AppIcons.Calendar,
-            title = "Mein Trainingsplan",
-            subtitle = when {
-                st == null -> "Plan wählen oder selbst erstellen"
-                next == null -> st.plan.spec.name + " abgeschlossen"
-                else -> "Woche ${next.first + 1} von ${st.plan.weeks.size} · als Nächstes " +
-                    st.plan.weeks[next.first][next.second].name
+        ) { vm.open(Screen.WORKOUTS) },
+        MenuItem(
+            AppIcons.Calendar, "Mein Trainingsplan",
+            when {
+                plan == null -> "Plan wählen oder selbst erstellen"
+                next == null -> plan.plan.spec.name + " abgeschlossen"
+                else -> "Woche ${next.first + 1} von ${plan.plan.weeks.size} · als Nächstes " +
+                    plan.plan.weeks[next.first][next.second].name
             },
-            onClick = { vm.open(Screen.PLAN) },
-        )
-    }
-    val historyRow: @Composable () -> Unit = {
-        MenuRow(
-            icon = AppIcons.Chart,
-            title = "Verlauf",
-            subtitle = if (lastRide == null) {
+        ) { vm.open(Screen.PLAN) },
+        MenuItem(
+            AppIcons.Activity, "Dashboard",
+            if (trend.verdict == null) {
+                "Analyse, Erholung, VO2max und Profil"
+            } else {
+                verdictText(trend.verdict) + (trend.fitness?.let {
+                    String.format(Locale.GERMANY, " · Fitness %.0f · Form %+.0f", it.now, trend.form)
+                } ?: "")
+            },
+        ) { vm.open(Screen.DASHBOARD) },
+        MenuItem(
+            AppIcons.Chart, "Verlauf",
+            if (lastRide == null) {
                 "Noch keine Fahrt gespeichert"
             } else {
                 "Zuletzt " + formatMs(lastRide.durationSec) + " · " +
                     String.format(Locale.GERMANY, "%.1f", lastRide.distanceM / 1000.0) + " km" +
                     (lastRide.avgPower?.let { " · Ø $it W" } ?: "")
             },
-            onClick = { vm.openHistory() },
-        )
-    }
-    val settingsRow: @Composable () -> Unit = {
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            TextButton(onClick = { vm.toggleTheme() }) {
-                Text(
-                    if (light) "Design: hell" else "Design: dunkel",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            TextButton(onClick = { vm.toggleKeepScreenOn() }) {
-                Text(
-                    if (screenOn) "Bildschirm bleibt an" else "Bildschirm darf ausgehen",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            TextButton(onClick = { vm.open(Screen.SETTINGS) }) {
-                Icon(
-                    AppIcons.Sliders,
-                    contentDescription = "Stufen der Freien Fahrt einstellen",
-                    modifier = Modifier.size(20.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                if (w.w >= 600) {
-                    Spacer(Modifier.width(8.dp))
-                    Text("Stufen", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-        }
-    }
+        ) { vm.openHistory() },
+        MenuItem(
+            AppIcons.Sliders, "Einstellungen",
+            "Stufen, Anzeige, Signale, Profil",
+        ) { vm.open(Screen.SETTINGS) },
+    )
 
+    val columns = if (w.tablet || w.landscape) 2 else 1
+    val gap = 12.dp
     Column(Modifier.fillMaxSize()) {
         TopBar("Rollentrainer", conn)
-        if (w.landscape) {
-            // Quer: links Stand und Einstellungen, rechts die beiden Wege aufs Rad
-            Row(
-                Modifier.fillMaxSize().padding(horizontal = w.gutter).padding(bottom = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(if (w.tablet) 24.dp else 12.dp),
+        if (w.short) {
+            // Wenig Höhe (Handy quer): feste Höhe, scrollen
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = w.gutter)
+                    .padding(bottom = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(gap),
             ) {
-                Column(Modifier.weight(1f)) {
-                    Column(
-                        Modifier.weight(1f).verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        EnvironmentBanners(vm, requestPermissions, enableBluetooth)
-                        devicesRow()
-                        planRow()
-                        historyRow()
+                EnvironmentBanners(vm, requestPermissions, enableBluetooth)
+                items.chunked(columns).forEach { row ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
+                        row.forEach { MenuRow(it, Modifier.weight(1f).height(80.dp)) }
+                        repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
                     }
-                    settingsRow()
-                }
-                Column(
-                    Modifier.weight(if (w.tablet) 1.4f else 1f),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    freeRideTile(Modifier.weight(1f))
-                    workoutTile(Modifier.weight(1f))
                 }
             }
         } else {
+            // Genug Höhe: die Menüpunkte teilen sich den Bildschirm gleichmäßig
             Column(
                 Modifier.fillMaxSize().padding(horizontal = w.gutter).padding(bottom = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(gap),
             ) {
                 EnvironmentBanners(vm, requestPermissions, enableBluetooth)
-                devicesRow()
-                freeRideTile(Modifier.weight(1f))
-                workoutTile(Modifier.weight(1f))
-                planRow()
-                historyRow()
-                settingsRow()
+                items.chunked(columns).forEach { row ->
+                    Row(
+                        Modifier.weight(1f).heightIn(max = if (w.tablet) 200.dp else 120.dp),
+                        horizontalArrangement = Arrangement.spacedBy(gap),
+                    ) {
+                        row.forEach { MenuRow(it, Modifier.weight(1f).fillMaxSize()) }
+                        repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+                    }
+                }
             }
         }
     }
 }
+
+private class MenuItem(
+    val icon: ImageVector,
+    val title: String,
+    val subtitle: String,
+    val onClick: () -> Unit,
+)
 
 @Composable
 private fun MenuHeader(
@@ -414,49 +373,17 @@ private fun MenuHeader(
     }
 }
 
-/** Kompakte Menüzeile mit aktuellem Stand. */
+/** Menüpunkt mit aktuellem Stand. Alle Menüpunkte nutzen diese eine Form. */
 @Composable
-private fun MenuRow(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit) {
+private fun MenuRow(item: MenuItem, modifier: Modifier = Modifier) {
     Column(
-        Modifier
-            .fillMaxWidth()
-            .heightIn(min = 80.dp)
+        modifier
             .card()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 16.dp),
+            .clickable(onClick = item.onClick)
+            .padding(horizontal = 20.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.Center,
     ) {
         val big = win().tablet
-        MenuHeader(icon, title, subtitle, titleSize = if (big) 22 else 18, big = big)
-    }
-}
-
-/** Große Menükachel; [moment] zeigt unten etwas Echtes aus der App. */
-@Composable
-private fun MenuTile(
-    icon: ImageVector,
-    title: String,
-    subtitle: String,
-    modifier: Modifier = Modifier,
-    dense: Boolean = false,
-    big: Boolean = false,
-    onClick: () -> Unit,
-    moment: @Composable () -> Unit,
-) {
-    Column(
-        modifier
-            .fillMaxWidth()
-            .card()
-            .clickable(onClick = onClick)
-            .padding(if (dense) 16.dp else if (big) 32.dp else 20.dp),
-        verticalArrangement = Arrangement.SpaceBetween,
-    ) {
-        MenuHeader(
-            icon, title, subtitle,
-            titleSize = if (dense) 20 else if (big) 32 else 24,
-            oneLine = dense,
-            big = big,
-        )
-        moment()
+        MenuHeader(item.icon, item.title, item.subtitle, titleSize = if (big) 22 else 18, big = big)
     }
 }

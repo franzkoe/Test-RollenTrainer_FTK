@@ -28,6 +28,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.graphics.Color
 import de.rollentrainer.app.data.Focus
+import de.rollentrainer.app.data.RecoveryLevel
+import de.rollentrainer.app.data.recoveryStatus
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -93,7 +95,7 @@ import kotlin.math.roundToInt
 private fun shortDate(ms: Long): String =
     SimpleDateFormat("d. MMM", Locale.GERMANY).format(Date(ms))
 
-private fun hours(seconds: Int): String =
+internal fun hours(seconds: Int): String =
     String.format(Locale.GERMANY, "%d:%02d", seconds / 3600, (seconds % 3600) / 60)
 
 /** Höchste Zone, in der die Einheit mindestens zwei Minuten verbringt. */
@@ -117,7 +119,7 @@ private fun targetLine(s: Session, profile: Profile): String {
 
 /** Zwei Bereiche: quer nebeneinander, hochkant untereinander in einer Spalte. */
 @Composable
-private fun Panes(
+internal fun Panes(
     w: Win,
     modifier: Modifier,
     first: @Composable () -> Unit,
@@ -153,7 +155,7 @@ private fun Panes(
 }
 
 @Composable
-private fun PlanCard(
+internal fun PlanCard(
     title: String? = null,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
@@ -168,7 +170,7 @@ private fun PlanCard(
 }
 
 @Composable
-private fun Hint(text: String) {
+internal fun Hint(text: String) {
     Text(
         text,
         fontSize = 14.sp,
@@ -179,7 +181,7 @@ private fun Hint(text: String) {
 
 /** Auswahl aus wenigen Möglichkeiten: die gewählte ist gefüllt, die anderen nur umrandet. */
 @Composable
-private fun Choice(options: List<String>, selected: Int, onSelect: (Int) -> Unit) {
+internal fun Choice(options: List<String>, selected: Int, onSelect: (Int) -> Unit) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         options.forEachIndexed { i, label ->
             val modifier = Modifier.weight(1f).height(48.dp)
@@ -283,7 +285,7 @@ private fun FocusDialog(
 
 /** Zeile, die auf eine Unterseite führt. */
 @Composable
-private fun LinkRow(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit) {
+internal fun LinkRow(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().card().clickable(onClick = onClick).padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -314,7 +316,7 @@ private fun LinkRow(icon: ImageVector, title: String, subtitle: String, onClick:
     }
 }
 
-private fun profileLine(p: Profile): String =
+internal fun profileLine(p: Profile): String =
     if (p.power) {
         "FTP ${p.ftp} W" + (p.wattsPerKgText()?.let { " ($it)" } ?: "") +
             " · der Widerstand wird vorgegeben"
@@ -770,6 +772,8 @@ private fun PlanDashboardScreen(vm: Engine, st: PlanState) {
     val w = win()
     var askEnd by remember { mutableStateOf(false) }
     var askFocus by remember { mutableStateOf(false) }
+    val recoveryList by vm.recovery.collectAsState()
+    val recovery = remember(recoveryList) { recoveryStatus(recoveryList, vm.today()) }
     BackHandler { vm.back() }
 
     val plan = st.plan
@@ -882,6 +886,18 @@ private fun PlanDashboardScreen(vm: Engine, st: PlanState) {
             val alt = remember(s) { alternativeFor(s) }
             NextCard(s, next, plan, profile, w.tablet, vm)
             PlanCard("Nicht gut erholt?") {
+                if (recovery.level == RecoveryLevel.LOW || recovery.level == RecoveryLevel.MEDIUM) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        ColorDot(if (recovery.level == RecoveryLevel.LOW) StatusNegative else StatusPending)
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "Heute: " + recovery.level.label +
+                                (if (recovery.reasons.isEmpty()) "" else " (" + recovery.reasons.joinToString(", ") + ")"),
+                            fontSize = 14.sp,
+                            lineHeight = 20.sp,
+                        )
+                    }
+                }
                 Hint(
                     if (st.hardRecently(System.currentTimeMillis())) {
                         "Deine letzte harte Einheit ist weniger als 36 Stunden her. Wenn die " +
@@ -904,6 +920,10 @@ private fun PlanDashboardScreen(vm: Engine, st: PlanState) {
     }
 
     val links: @Composable () -> Unit = {
+        LinkRow(
+            AppIcons.Activity, "Dashboard",
+            "Verbesserung, Erholung und VO2max",
+        ) { vm.open(Screen.DASHBOARD) }
         LinkRow(
             AppIcons.Message, "KI-Auswertung",
             "Stand auswerten oder eine Einheit vorschlagen lassen",

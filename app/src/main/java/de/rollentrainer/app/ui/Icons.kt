@@ -66,6 +66,7 @@ object AppIcons {
     )
     val Timer = lineIcon("timer", "M10 2h4 M12 14l3-3 M4 14a8 8 0 1 0 16 0a8 8 0 1 0-16 0")
     val Chart = lineIcon("chart", "M3 3v18h18 M7 15l4-5 4 3 5-7")
+    val Activity = lineIcon("activity", "M22 12h-4l-3 9L9 3l-3 9H2")
     val Calendar = lineIcon(
         "calendar",
         "M8 2v4 M16 2v4 M3 10h18 M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z",
