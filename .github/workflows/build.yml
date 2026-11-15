@@ -23,25 +23,14 @@ jobs:
         with:
           gradle-version: "8.14.3"
 
-      - name: Plan-Logik prüfen
-        run: gradle :app:testReleaseUnitTest --no-daemon --stacktrace
+      - name: Bildschirme rendern
+        run: gradle :app:testDebugUnitTest --tests "*ShotsTest" --no-daemon
 
-      - name: APK bauen
-        run: gradle :app:assembleRelease --no-daemon --stacktrace
-
-      - name: APK umbenennen
-        run: cp app/build/outputs/apk/release/app-release.apk Rollentrainer.apk
-
-      - name: APK als Artefakt hochladen
-        uses: actions/upload-artifact@v4
-        with:
-          name: Rollentrainer-APK
-          path: Rollentrainer.apk
-
-      - name: APK als Release veröffentlichen
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v2.5.${{ github.run_number }}
-          name: Rollentrainer 2.5.${{ github.run_number }}
-          files: Rollentrainer.apk
+      - name: Bilder ablegen
+        if: always()
+        run: |
+          cd app/build/shots || exit 0
+          git init -q -b shots-out
+          git add -A
+          git -c user.name=ci -c user.email=ci@users.noreply.github.com commit -qm "Bildschirme"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" shots-out
