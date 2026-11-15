@@ -14,8 +14,8 @@ android {
         applicationId = "de.rollentrainer.app"
         minSdk = 31
         targetSdk = 36
-        versionCode = 4
-        versionName = "2.2"
+        versionCode = 5
+        versionName = "2.3"
     }
 
     // Fester Signaturschlüssel im Projekt, damit jede gebaute APK gleich signiert ist
@@ -72,4 +72,8 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.10.1")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+
+    // Prüfungen der Plan-Logik (laufen beim Bauen auf GitHub)
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
 }

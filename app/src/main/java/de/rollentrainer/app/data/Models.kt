@@ -28,7 +28,17 @@ data class SavedDevice(val address: String, val name: String, val type: String =
 
 enum class PhaseType { WARMUP, INTERVAL, REST, COOLDOWN }
 
-data class Phase(val type: PhaseType, val label: String, val seconds: Int, val watts: Int)
+/**
+ * Abschnitt im Ablauf. [zone] (1 bis 5, 0 = keine) kommt aus dem Trainingsplan; ohne Wattvorgabe
+ * ([watts] 0 bei gesetzter Zone) wird nach Puls trainiert und der Widerstand von Hand gestellt.
+ */
+data class Phase(
+    val type: PhaseType,
+    val label: String,
+    val seconds: Int,
+    val watts: Int,
+    val zone: Int = 0,
+)
 
 /** Trainingsvorlage. Dauer 0 bei Aufwärmen/Ausfahren bedeutet: Phase entfällt. */
 data class Workout(

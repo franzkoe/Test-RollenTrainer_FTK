@@ -191,6 +191,18 @@ fun IconLabel(icon: ImageVector, text: String, fontSize: Int = 18, iconSize: Int
     Text(text, fontSize = fontSize.sp, fontWeight = FontWeight.Medium, maxLines = 1)
 }
 
+/** Farbe eines Abschnitts: nach Zone, wenn er aus dem Trainingsplan stammt, sonst nach Watt. */
+fun phaseColor(p: Phase): Color = if (p.zone > 0) zoneColor(p.zone) else intensityColor(p.watts)
+
+/** Höhe eines Abschnitts im Profil: Watt, ohne Wattvorgabe die typische Intensität der Zone. */
+private fun phaseValue(p: Phase, byZone: Boolean): Int =
+    if (byZone) listOf(50, 65, 83, 98, 112)[(p.zone - 1).coerceIn(0, 4)] else p.watts
+
+@Composable
+fun ColorDot(color: Color, size: Dp = 8.dp) {
+    Box(Modifier.size(size).clip(CircleShape).background(color))
+}
+
 /** Kleiner Punkt in der Farbe der Intensitätsskala. */
 @Composable
 fun IntensityDot(watts: Int, size: Dp = 8.dp) {
@@ -450,14 +462,16 @@ fun WorkoutChart(phases: List<Phase>, modifier: Modifier = Modifier, progress: F
     Canvas(modifier) {
         val total = phases.sumOf { it.seconds }.toFloat()
         if (total <= 0f) return@Canvas
-        val maxW = max(phases.maxOf { it.watts }, 100).toFloat()
+        // Training nach Puls hat keine Wattwerte: dann bestimmt die Zone die Höhe
+        val byZone = phases.all { it.watts == 0 } && phases.any { it.zone > 0 }
+        val maxW = max(phases.maxOf { phaseValue(it, byZone) }, 100).toFloat()
         val gap = 2.dp.toPx()
         var x = 0f
         phases.forEach { p ->
             val w = size.width * p.seconds / total
-            val h = size.height * (0.10f + 0.90f * p.watts / maxW)
+            val h = size.height * (0.10f + 0.90f * phaseValue(p, byZone) / maxW)
             drawRect(
-                color = intensityColor(p.watts),
+                color = phaseColor(p),
                 topLeft = Offset(x, size.height - h),
                 size = Size(max(w - gap, 1f), h),
             )

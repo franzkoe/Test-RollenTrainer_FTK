@@ -73,7 +73,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import de.rollentrainer.app.Engine
 import de.rollentrainer.app.RunUi
+import de.rollentrainer.app.data.LevelConfig
 import de.rollentrainer.app.data.MAX_WATTS
+import de.rollentrainer.app.data.Profile
+import de.rollentrainer.app.data.zoneName
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import de.rollentrainer.app.data.Workout
 import kotlin.math.roundToInt
 
@@ -496,6 +501,17 @@ fun WorkoutRunScreen(vm: Engine) {
     BackHandler { if (!run.finished) askEnd = true }
 
     val w = win()
+    val profile by vm.profile.collectAsState()
+    val config by vm.levelConfig.collectAsState()
+
+    // Phase mit Ziel; beim Training nach Puls direkt darunter die Stufenwahl
+    val phasePanel: @Composable (Boolean) -> Unit = { large ->
+        PhasePanel(run, large, profile, heartRate)
+        if (run.manual) {
+            if (large) Spacer(Modifier.height(16.dp))
+            LevelStepper(run.level, config, large, run.paused) { vm.changeRunLevel(it) }
+        }
+    }
 
     Column(Modifier.fillMaxSize()) {
         TopBar(run.workoutName, conn, onBack = { if (!run.finished) askEnd = true })
@@ -529,7 +545,7 @@ fun WorkoutRunScreen(vm: Engine) {
                         if (big) {
                             // Tablet: Phase oben, Bedienung unten am Rand der linken Hälfte
                             Column(Modifier.weight(1f).fillMaxSize().padding(bottom = 8.dp)) {
-                                PhasePanel(run, true)
+                                phasePanel(true)
                                 Spacer(Modifier.weight(1f))
                                 RunButtons(run, true, onPause = { vm.togglePause() }, onEnd = { askEnd = true })
                             }
@@ -538,7 +554,7 @@ fun WorkoutRunScreen(vm: Engine) {
                                 Modifier.weight(1f).verticalScroll(rememberScrollState()),
                                 verticalArrangement = Arrangement.spacedBy(12.dp),
                             ) {
-                                PhasePanel(run, false)
+                                phasePanel(false)
                                 RunButtons(run, false, onPause = { vm.togglePause() }, onEnd = { askEnd = true })
                             }
                         }
@@ -563,7 +579,7 @@ fun WorkoutRunScreen(vm: Engine) {
                             .padding(bottom = 16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        PhasePanel(run, big)
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { phasePanel(big) }
                         ProgressPanel(run, chartHeight = if (big) 120.dp else 56.dp)
                         if (big) {
                             MetricGrid(metrics, columns = 3, compact = false, large = true)
@@ -603,11 +619,12 @@ fun WorkoutRunScreen(vm: Engine) {
 
 /** Aktuelle Phase, Zielwatt und Restzeit der Phase – groß und farblich gekennzeichnet. */
 @Composable
-private fun PhasePanel(run: RunUi, big: Boolean = false) {
+private fun PhasePanel(run: RunUi, big: Boolean, profile: Profile, heartRate: Int?) {
     val phase = run.phases[run.phaseIndex.coerceIn(0, run.phases.size - 1)]
-    val shownWatts = if (run.paused) 0 else phase.watts
     val color by animateColorAsState(
-        intensityColor(shownWatts), tween(300, easing = AppEasing), label = "phaseColor"
+        if (run.paused) intensityColor(0) else phaseColor(phase),
+        tween(300, easing = AppEasing),
+        label = "phaseColor",
     )
 
     // Die Phase färbt nur den Streifen oben; Schrift und Fläche bleiben ruhig und gut lesbar
@@ -640,16 +657,17 @@ private fun PhasePanel(run: RunUi, big: Boolean = false) {
         ) {
             Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    "Zielwatt",
+                    if (run.manual) "Zielpuls · Zone ${phase.zone}" else "Zielwatt",
                     fontSize = 14.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    if (phase.watts == 0) "Leerlauf" else "${phase.watts} W",
+                    if (run.manual) profile.zoneText(phase.zone)
+                    else if (phase.watts == 0) "Leerlauf" else "${phase.watts} W",
                     fontSize = if (big) {
-                        if (phase.watts == 0) 56.sp else 80.sp
+                        if (run.manual || phase.watts == 0) 56.sp else 80.sp
                     } else {
-                        if (phase.watts == 0) 32.sp else 44.sp
+                        if (run.manual) 36.sp else if (phase.watts == 0) 32.sp else 44.sp
                     },
                     fontWeight = FontWeight.SemiBold,
                     style = Tnum,
@@ -673,7 +691,107 @@ private fun PhasePanel(run: RunUi, big: Boolean = false) {
                 )
             }
         }
+        if (run.manual) PulseGuide(phase.zone, profile, heartRate, big)
       }
+    }
+}
+
+/** Training nach Puls: Liegt der Puls in der Zielzone, und in welche Richtung ist zu schalten? */
+@Composable
+private fun PulseGuide(zone: Int, profile: Profile, heartRate: Int?, big: Boolean) {
+    val (lo, hi) = profile.zoneBounds(zone)
+    val text: String
+    val color: Color
+    when {
+        heartRate == null -> {
+            text = "Kein Puls. Verbinde unter „Geräte“ einen Pulsmesser."
+            color = MaterialTheme.colorScheme.outline
+        }
+
+        lo != null && heartRate < lo -> {
+            text = "Puls $heartRate · unter der Zone, Stufe erhöhen"
+            color = StatusPending
+        }
+
+        hi != null && heartRate > hi -> {
+            text = "Puls $heartRate · über der Zone, Stufe senken"
+            color = StatusPending
+        }
+
+        else -> {
+            text = "Puls $heartRate · in der Zone"
+            color = StatusPositive
+        }
+    }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        ColorDot(color)
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text,
+            fontSize = if (big) 20.sp else 15.sp,
+            style = Tnum,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** Stufenwahl im Training nach Puls: kompakter als in der Freien Fahrt. */
+@Composable
+private fun LevelStepper(
+    level: Int,
+    config: LevelConfig,
+    big: Boolean,
+    paused: Boolean,
+    onChange: (Int) -> Unit,
+) {
+    val haptic = LocalHapticFeedback.current
+    val watts = config.watts(level)
+    val button = if (big) 112.dp else 72.dp
+    val icon = if (big) 48.dp else 32.dp
+    Row(
+        Modifier.fillMaxWidth().card().padding(if (big) 24.dp else 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Button(
+            onClick = {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                onChange(-1)
+            },
+            enabled = level > 0,
+            modifier = Modifier.size(button),
+            shape = RoundedCornerShape(16.dp),
+            contentPadding = PaddingValues(0.dp),
+        ) { Icon(AppIcons.Minus, contentDescription = "Stufe runter", modifier = Modifier.size(icon)) }
+        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                "Stufe",
+                fontSize = if (big) 16.sp else 13.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                level.toString(),
+                fontSize = if (big) 72.sp else 40.sp,
+                lineHeight = if (big) 76.sp else 44.sp,
+                fontWeight = FontWeight.SemiBold,
+                style = Tnum,
+            )
+            Text(
+                if (paused) "Pausiert" else if (level == 0) "Leerlauf" else "$watts W",
+                fontSize = if (big) 22.sp else 16.sp,
+                style = Tnum,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Button(
+            onClick = {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                onChange(1)
+            },
+            enabled = level < config.levels,
+            modifier = Modifier.size(button),
+            shape = RoundedCornerShape(16.dp),
+            contentPadding = PaddingValues(0.dp),
+        ) { Icon(AppIcons.Plus, contentDescription = "Stufe hoch", modifier = Modifier.size(icon)) }
     }
 }
 
@@ -720,11 +838,13 @@ private fun ProgressPanel(run: RunUi, chartHeight: androidx.compose.ui.unit.Dp =
             if (next == null) {
                 Text("Ende des Trainings", fontSize = 14.sp, fontWeight = FontWeight.Medium)
             } else {
-                IntensityDot(next.watts)
+                ColorDot(phaseColor(next))
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    next.label + "  ·  " + (if (next.watts == 0) "Leerlauf" else "${next.watts} W") +
-                        "  ·  " + formatMs(next.seconds),
+                    next.label + "  ·  " + (
+                        if (run.manual) "Zone ${next.zone}"
+                        else if (next.watts == 0) "Leerlauf" else "${next.watts} W"
+                        ) + "  ·  " + formatMs(next.seconds),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium,
                     style = Tnum,

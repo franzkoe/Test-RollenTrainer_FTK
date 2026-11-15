@@ -33,7 +33,26 @@ import de.rollentrainer.app.ble.ConnState
 import de.rollentrainer.app.ble.FoundDevice
 import de.rollentrainer.app.ble.FtmsManager
 import de.rollentrainer.app.ble.HrManager
+import de.rollentrainer.app.data.AI_ASK_ANALYSIS
+import de.rollentrainer.app.data.AI_SYSTEM
+import de.rollentrainer.app.data.AiAnswer
+import de.rollentrainer.app.data.AiConfig
+import de.rollentrainer.app.data.AiException
+import de.rollentrainer.app.data.Done
 import de.rollentrainer.app.data.ExportFormat
+import de.rollentrainer.app.data.PlanSpec
+import de.rollentrainer.app.data.PlanState
+import de.rollentrainer.app.data.Profile
+import de.rollentrainer.app.data.ST_ALT
+import de.rollentrainer.app.data.ST_DONE
+import de.rollentrainer.app.data.ST_SKIP
+import de.rollentrainer.app.data.Session
+import de.rollentrainer.app.data.aiAskSession
+import de.rollentrainer.app.data.aiChat
+import de.rollentrainer.app.data.aiContext
+import de.rollentrainer.app.data.alternativeFor
+import de.rollentrainer.app.data.generatePlan
+import de.rollentrainer.app.data.parseAiAnswer
 import de.rollentrainer.app.data.FitEncoder
 import de.rollentrainer.app.data.LevelConfig
 import de.rollentrainer.app.data.Phase
@@ -71,6 +90,7 @@ import kotlin.math.roundToInt
 
 enum class Screen {
     HOME, DEVICES, SETTINGS, FREE_RIDE, WORKOUTS, EDITOR, WORKOUT_RUN, SUMMARY, HISTORY, RIDE_DETAIL,
+    PLAN, PLAN_NEW, PLAN_PROFILE, PLAN_AI,
 }
 
 /** countdown: 3, 2, 1, 0 (= „Start!“), null = Fahrt läuft. */
@@ -91,7 +111,22 @@ data class RunUi(
     val totalSec: Int = 0,
     val paused: Boolean = false,
     val finished: Boolean = false,
+    /** Training nach Puls: keine Wattvorgabe, der Widerstand wird über [level] selbst gestellt. */
+    val manual: Boolean = false,
+    val level: Int = 0,
 )
+
+/** Stand der KI-Anfrage: läuft, Antworttext, Fehler und ggf. die vorgeschlagene Einheit. */
+data class AiUi(
+    val busy: Boolean = false,
+    val text: String = "",
+    val error: String? = null,
+    val session: Session? = null,
+)
+
+const val AI_ANALYSIS = 0
+const val AI_SESSION = 1
+const val AI_QUESTION = 2
 
 /** Von der App selbst mitgerechnete Live-Werte der laufenden Einheit. */
 data class LiveExtra(val distanceM: Double = 0.0, val kcal: Int? = null)
@@ -169,6 +204,36 @@ class Engine private constructor(private val app: Context) {
         store.devices.stateIn(scope, SharingStarted.Eagerly, emptyList())
     val workouts: StateFlow<List<Workout>> =
         store.workouts.stateIn(scope, SharingStarted.Eagerly, emptyList())
+
+    // ---- Trainingsplan ----
+    val profile: StateFlow<Profile> =
+        store.profile.stateIn(scope, SharingStarted.Eagerly, Profile())
+    val planState: StateFlow<PlanState?> =
+        store.plan.stateIn(scope, SharingStarted.Eagerly, null)
+    val aiConfig: StateFlow<AiConfig> =
+        store.ai.stateIn(scope, SharingStarted.Eagerly, AiConfig())
+    private val _ai = MutableStateFlow(AiUi())
+    val ai: StateFlow<AiUi> = _ai
+    private var aiJob: Job? = null
+
+    /** Hinweis auf der Zusammenfassung, ob die Einheit im Plan eingetragen wurde. */
+    private val _planNote = MutableStateFlow<String?>(null)
+    val planNote: StateFlow<String?> = _planNote
+
+    /** Laufende Einheit aus dem Trainingsplan; [week] -1 = zählt nicht für den Plan. */
+    private class PlanRun(
+        val week: Int,
+        val index: Int,
+        val alt: Boolean,
+        val name: String,
+        val hard: Boolean,
+        val totalSec: Int,
+    )
+
+    private var planRun: PlanRun? = null
+
+    /** Wohin es nach „Speichern“/„Verwerfen“ geht. */
+    private var returnScreen = Screen.HOME
 
     private val _rides = MutableStateFlow<List<RideSummary>>(emptyList())
     val rides: StateFlow<List<RideSummary>> = _rides
@@ -347,7 +412,10 @@ class Engine private constructor(private val app: Context) {
                 _screen.value = Screen.HOME
             }
 
-            Screen.WORKOUTS, Screen.HISTORY, Screen.SETTINGS -> _screen.value = Screen.HOME
+            Screen.WORKOUTS, Screen.HISTORY, Screen.SETTINGS, Screen.PLAN ->
+                _screen.value = Screen.HOME
+
+            Screen.PLAN_NEW, Screen.PLAN_PROFILE, Screen.PLAN_AI -> _screen.value = Screen.PLAN
             Screen.EDITOR -> _screen.value = Screen.WORKOUTS
             Screen.RIDE_DETAIL -> _screen.value = Screen.HISTORY
             else -> Unit
@@ -543,15 +611,41 @@ class Engine private constructor(private val app: Context) {
         sessionRunning = false
         currentTarget = 0
         RideService.stop(app)
+        val pr = planRun
+        planRun = null
+        returnScreen = if (pr != null) Screen.PLAN else Screen.HOME
+        _planNote.value = null
         if (samples.size >= 2) {
             val list = samples.toList()
             val summary = summarize(UUID.randomUUID().toString(), recName, list, _live.value.kcal)
+            // Einheit aus dem Plan: zählt, wenn mindestens die Hälfte gefahren wurde
+            if (pr != null && pr.week >= 0) {
+                if (summary.durationSec * 2 >= pr.totalSec) {
+                    addDone(
+                        Done(
+                            week = pr.week,
+                            index = pr.index,
+                            status = if (pr.alt) ST_ALT else ST_DONE,
+                            dateMs = System.currentTimeMillis(),
+                            name = pr.name,
+                            seconds = summary.durationSec,
+                            avgPower = summary.avgPower,
+                            avgHr = summary.avgHr,
+                            hard = pr.hard,
+                        )
+                    )
+                    _planNote.value = "Im Trainingsplan als erledigt eingetragen"
+                } else {
+                    _planNote.value =
+                        "Weniger als die Hälfte gefahren. Die Einheit bleibt im Trainingsplan offen."
+                }
+            }
             _pending.value = RideDetail(summary, list)
             _screen.value = Screen.SUMMARY
             saveDraft() // bleibt erhalten, bis „Speichern“ oder „Verwerfen“ gewählt wurde
         } else {
             scope.launch { rideStore.clearDraft() }
-            _screen.value = Screen.HOME
+            _screen.value = returnScreen
         }
     }
 
@@ -569,7 +663,8 @@ class Engine private constructor(private val app: Context) {
     fun savePending() {
         val p = _pending.value
         _pending.value = null
-        _screen.value = Screen.HOME
+        _screen.value = returnScreen
+        returnScreen = Screen.HOME
         if (p != null) {
             scope.launch {
                 rideStore.save(p.summary, p.samples)
@@ -581,7 +676,8 @@ class Engine private constructor(private val app: Context) {
 
     fun discardPending() {
         _pending.value = null
-        _screen.value = Screen.HOME
+        _screen.value = returnScreen
+        returnScreen = Screen.HOME
         scope.launch { rideStore.clearDraft() }
     }
 
@@ -607,6 +703,9 @@ class Engine private constructor(private val app: Context) {
                     r.countdown != null -> r.workoutName to "Start …"
                     r.finished || phase == null -> r.workoutName to "Training abgeschlossen"
                     r.paused -> r.workoutName to "Pausiert · noch ${formatMs(r.totalRemainingSec)}"
+                    r.manual -> r.workoutName to
+                        "${phase.label} · Zone ${phase.zone} · noch ${formatMs(r.phaseRemainingSec)}$actual"
+
                     else -> r.workoutName to
                         "${phase.label} · ${phase.watts} W · noch ${formatMs(r.phaseRemainingSec)}$actual"
                 }
@@ -620,6 +719,7 @@ class Engine private constructor(private val app: Context) {
 
     fun openFreeRide() {
         if (!requireTrainer()) return
+        planRun = null
         _ride.value = RideUi()
         _screen.value = Screen.FREE_RIDE
         prepareSession("Freie Fahrt")
@@ -721,17 +821,27 @@ class Engine private constructor(private val app: Context) {
         if (!requireTrainer()) return
         val phases = w.phases()
         if (phases.isEmpty()) return
+        planRun = null
+        startRun(w.name, phases, manual = false)
+    }
+
+    /**
+     * Startet einen Ablauf. [manual]: Training nach Puls, die App gibt nur die Zielzone vor und
+     * der Widerstand wird wie in der Freien Fahrt über Stufen gestellt (Start im Leerlauf).
+     */
+    private fun startRun(name: String, phases: List<Phase>, manual: Boolean) {
         val total = phases.sumOf { it.seconds }
         _run.value = RunUi(
-            workoutName = w.name,
+            workoutName = name,
             phases = phases,
             countdown = 3,
             phaseRemainingSec = phases[0].seconds,
             totalRemainingSec = total,
             totalSec = total,
+            manual = manual,
         )
         _screen.value = Screen.WORKOUT_RUN
-        prepareSession(w.name)
+        prepareSession(name)
         sessionJob?.cancel()
         sessionJob = scope.launch {
             for (c in 3 downTo 1) {
@@ -741,7 +851,7 @@ class Engine private constructor(private val app: Context) {
             _run.update { it.copy(countdown = 0) }
             signal()
             ble.startSession()
-            setTarget(phases[0].watts)
+            setTarget(if (manual) 0 else phases[0].watts)
             delay(700)
             startRecording()
             _run.update { it.copy(countdown = null) }
@@ -767,7 +877,7 @@ class Engine private constructor(private val app: Context) {
                 }
                 if (i != index) {
                     index = i
-                    if (!paused) setTarget(phases[i].watts) // ERG-Ziel bei Phasenwechsel
+                    if (!paused && !manual) setTarget(phases[i].watts) // ERG-Ziel bei Phasenwechsel
                     signal()
                 }
                 _run.update {
@@ -801,8 +911,149 @@ class Engine private constructor(private val app: Context) {
         if (r.countdown != null || r.finished || r.phases.isEmpty()) return
         val paused = !r.paused
         _run.value = r.copy(paused = paused)
-        // Pause: Widerstand auf Leerlauf; Weiter: Zielwatt der aktuellen Phase
-        setTarget(if (paused) 0 else r.phases[r.phaseIndex].watts)
+        // Pause: Widerstand auf Leerlauf; Weiter: Zielwatt der Phase bzw. die gewählte Stufe
+        setTarget(
+            when {
+                paused -> 0
+                r.manual -> levelConfig.value.watts(r.level)
+                else -> r.phases[r.phaseIndex].watts
+            }
+        )
+    }
+
+    /** Training nach Puls: Widerstand eine Stufe hoch oder runter. */
+    fun changeRunLevel(delta: Int) {
+        val r = _run.value
+        if (!r.manual || r.countdown != null || r.finished) return
+        val config = levelConfig.value
+        val next = (r.level + delta).coerceIn(0, config.levels)
+        if (next == r.level) return
+        _run.update { it.copy(level = next) }
+        if (!r.paused) setTarget(config.watts(next))
+    }
+
+    // ------------------------------------------------------------------ Trainingsplan
+
+    fun setProfile(p: Profile) {
+        scope.launch { store.setProfile(p) }
+    }
+
+    /** Erzeugt den Plan aus den Eckdaten und macht ihn zum aktiven Plan. */
+    fun startPlan(spec: PlanSpec) {
+        val st = PlanState(generatePlan(spec), System.currentTimeMillis())
+        scope.launch { store.setPlan(st) }
+        _screen.value = Screen.PLAN
+    }
+
+    fun endPlan() {
+        scope.launch { store.setPlan(null) }
+    }
+
+    private fun addDone(d: Done) {
+        val st = planState.value ?: return
+        if (d.week !in st.plan.weeks.indices || st.entry(d.week, d.index) != null) return
+        scope.launch { store.setPlan(st.copy(done = st.done + d)) }
+    }
+
+    /** Nächste Einheit auslassen. */
+    fun skipNext() {
+        val st = planState.value ?: return
+        val (w, i) = st.next() ?: return
+        addDone(Done(w, i, ST_SKIP, System.currentTimeMillis(), st.plan.weeks[w][i].name))
+    }
+
+    /** Nächste Einheit als gefahren eintragen (z. B. draußen oder ohne App gefahren). */
+    fun markNextDone() {
+        val st = planState.value ?: return
+        val (w, i) = st.next() ?: return
+        val s = st.plan.weeks[w][i]
+        addDone(Done(w, i, ST_DONE, System.currentTimeMillis(), s.name, s.seconds, hard = s.hard))
+    }
+
+    /** Nimmt den letzten Eintrag (erledigt, ersetzt oder übersprungen) zurück. */
+    fun undoLastDone() {
+        val st = planState.value ?: return
+        if (st.done.isEmpty()) return
+        scope.launch { store.setPlan(st.copy(done = st.done.dropLast(1))) }
+    }
+
+    /** Startet die nächste Einheit des Plans; [alt] = die leichtere Alternative. */
+    fun startNext(alt: Boolean) {
+        val st = planState.value ?: return
+        val (w, i) = st.next() ?: return
+        val planned = st.plan.weeks[w][i]
+        val s = if (alt) alternativeFor(planned) else planned
+        startSession(s, PlanRun(w, i, alt, s.name, s.hard, s.seconds))
+    }
+
+    /**
+     * Startet eine Einheit: mit FTP werden die Watt vorgegeben, sonst wird nach Pulszonen
+     * gefahren und der Widerstand selbst gestellt.
+     */
+    private fun startSession(s: Session, ref: PlanRun) {
+        if (!requireTrainer()) return
+        val p = profile.value
+        val phases = s.phases(p)
+        if (phases.isEmpty()) return
+        planRun = ref
+        startRun(s.name, phases, manual = !p.power)
+    }
+
+    // ------------------------------------------------------------------ KI
+
+    fun saveAiConfig(c: AiConfig) {
+        scope.launch { store.setAi(c.copy(url = c.url.trim(), key = c.key.trim(), model = c.model.trim())) }
+    }
+
+    /** Vollständiger Anfragetext: Trainingsstand und Frage. Auch zum Teilen in eine andere App. */
+    fun aiPrompt(kind: Int, question: String): String {
+        val ask = when (kind) {
+            AI_ANALYSIS -> AI_ASK_ANALYSIS
+            AI_SESSION -> aiAskSession(profile.value)
+            else -> question.trim()
+        }
+        return aiContext(profile.value, planState.value, rides.value, System.currentTimeMillis()) +
+            "\nFRAGE\n" + ask
+    }
+
+    fun askAi(kind: Int, question: String = "") {
+        val cfg = aiConfig.value
+        if (!cfg.ready) {
+            _ai.value = AiUi(error = "Trage zuerst Adresse und Modell des KI-Dienstes ein.")
+            return
+        }
+        if (kind == AI_QUESTION && question.isBlank()) return
+        val prompt = aiPrompt(kind, question)
+        aiJob?.cancel()
+        _ai.value = AiUi(busy = true)
+        aiJob = scope.launch {
+            try {
+                val raw = aiChat(cfg, AI_SYSTEM, prompt)
+                val answer = if (kind == AI_SESSION) parseAiAnswer(raw) else AiAnswer(raw, null)
+                _ai.value = AiUi(text = answer.text, session = answer.session)
+            } catch (e: AiException) {
+                _ai.value = AiUi(error = e.message)
+            }
+        }
+    }
+
+    fun cancelAi() {
+        aiJob?.cancel()
+        aiJob = null
+        _ai.value = AiUi()
+    }
+
+    /**
+     * Startet die von der KI vorgeschlagene Einheit. [forPlan]: Sie ersetzt die nächste Einheit
+     * des Plans, sonst läuft sie zusätzlich.
+     */
+    fun startAiSession(forPlan: Boolean) {
+        val s = _ai.value.session ?: return
+        val next = if (forPlan) planState.value?.next() else null
+        startSession(
+            s,
+            PlanRun(next?.first ?: -1, next?.second ?: -1, true, s.name, s.hard, s.seconds),
+        )
     }
 
     // ------------------------------------------------------------------ Verlauf

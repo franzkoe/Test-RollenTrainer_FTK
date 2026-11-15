@@ -23,6 +23,9 @@ jobs:
         with:
           gradle-version: "8.14.3"
 
+      - name: Plan-Logik prüfen
+        run: gradle :app:testReleaseUnitTest --no-daemon --stacktrace
+
       - name: APK bauen
         run: gradle :app:assembleRelease --no-daemon --stacktrace
 
@@ -39,6 +42,6 @@ jobs:
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v2.2.${{ github.run_number }}
-          name: Rollentrainer 2.2.${{ github.run_number }}
+          tag_name: v2.3.${{ github.run_number }}
+          name: Rollentrainer 2.3.${{ github.run_number }}
           files: Rollentrainer.apk

@@ -156,6 +156,15 @@ fun intensityColor(watts: Int): Color = when {
     else -> Color(0xFFD9534F)
 }
 
+/** Farbe der Trainingszone 1 bis 5 (gleiche Skala wie die Intensität). */
+fun zoneColor(zone: Int): Color = when {
+    zone <= 1 -> Color(0xFF3FAE77)
+    zone == 2 -> Color(0xFF93B83F)
+    zone == 3 -> Color(0xFFDDAE2F)
+    zone == 4 -> Color(0xFFE08A3C)
+    else -> Color(0xFFD9534F)
+}
+
 /** Zustandsfarben, gedämpft, passend zu beiden Farbreihen. */
 val StatusPositive = Color(0xFF34A86B)
 val StatusPending = Color(0xFFDDAE2F)

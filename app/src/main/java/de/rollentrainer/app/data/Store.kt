@@ -28,6 +28,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import org.json.JSONArray
 import org.json.JSONObject
@@ -46,6 +47,9 @@ class Store(private val context: Context) {
     private val keyScreenOn = booleanPreferencesKey("keep_screen_on")
     private val keyLevels = stringPreferencesKey("free_ride_levels")
     private val keyMaxWatts = stringPreferencesKey("free_ride_max_watts")
+    private val keyProfile = stringPreferencesKey("profile")
+    private val keyPlan = stringPreferencesKey("plan")
+    private val keyAi = stringPreferencesKey("ai")
 
     val devices: Flow<List<SavedDevice>> =
         context.dataStore.data.map { parseDevices(it[keyDevices]) }
@@ -63,6 +67,32 @@ class Store(private val context: Context) {
     val lastHr: Flow<String?> = context.dataStore.data.map { it[keyLastHr] }
 
     val keepScreenOn: Flow<Boolean> = context.dataStore.data.map { it[keyScreenOn] ?: true }
+
+    /** Trainingsprofil: FTP bzw. Pulszonen. */
+    val profile: Flow<Profile> =
+        context.dataStore.data.map { it[keyProfile] }.distinctUntilChanged().map { parseProfile(it) }
+
+    suspend fun setProfile(p: Profile) {
+        context.dataStore.edit { it[keyProfile] = profileToJson(p) }
+    }
+
+    /** Aktiver Trainingsplan mit Fortschritt; null = kein Plan. */
+    val plan: Flow<PlanState?> =
+        context.dataStore.data.map { it[keyPlan] }.distinctUntilChanged().map { parsePlanState(it) }
+
+    suspend fun setPlan(st: PlanState?) {
+        context.dataStore.edit {
+            if (st == null) it.remove(keyPlan) else it[keyPlan] = planStateToJson(st)
+        }
+    }
+
+    /** Zugang zum KI-Dienst. Der Schlüssel liegt nur im privaten Speicher der App. */
+    val ai: Flow<AiConfig> =
+        context.dataStore.data.map { it[keyAi] }.distinctUntilChanged().map { parseAiConfig(it) }
+
+    suspend fun setAi(c: AiConfig) {
+        context.dataStore.edit { it[keyAi] = aiConfigToJson(c) }
+    }
 
     suspend fun setLastHr(address: String?) {
         context.dataStore.edit {

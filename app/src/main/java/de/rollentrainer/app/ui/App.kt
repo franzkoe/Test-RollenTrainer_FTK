@@ -88,6 +88,10 @@ fun App(
                         Screen.SUMMARY -> SummaryScreen(vm)
                         Screen.HISTORY -> HistoryScreen(vm)
                         Screen.RIDE_DETAIL -> RideDetailScreen(vm, onShare, onSave)
+                        Screen.PLAN -> PlanScreen(vm)
+                        Screen.PLAN_NEW -> PlanNewScreen(vm)
+                        Screen.PLAN_PROFILE -> PlanProfileScreen(vm)
+                        Screen.PLAN_AI -> PlanAiScreen(vm)
                     }
                 }
 
@@ -264,6 +268,22 @@ fun HomeScreen(vm: Engine, requestPermissions: () -> Unit, enableBluetooth: () -
             WorkoutChart(preview.phases(), Modifier.fillMaxWidth().height(moment))
         }
     }
+    val planState by vm.planState.collectAsState()
+    val planRow: @Composable () -> Unit = {
+        val st = planState
+        val next = st?.next()
+        MenuRow(
+            icon = AppIcons.Calendar,
+            title = "Mein Trainingsplan",
+            subtitle = when {
+                st == null -> "Plan wählen oder selbst erstellen"
+                next == null -> st.plan.spec.name + " abgeschlossen"
+                else -> "Woche ${next.first + 1} von ${st.plan.weeks.size} · als Nächstes " +
+                    st.plan.weeks[next.first][next.second].name
+            },
+            onClick = { vm.open(Screen.PLAN) },
+        )
+    }
     val historyRow: @Composable () -> Unit = {
         MenuRow(
             icon = AppIcons.Chart,
@@ -326,6 +346,7 @@ fun HomeScreen(vm: Engine, requestPermissions: () -> Unit, enableBluetooth: () -
                     ) {
                         EnvironmentBanners(vm, requestPermissions, enableBluetooth)
                         devicesRow()
+                        planRow()
                         historyRow()
                     }
                     settingsRow()
@@ -347,6 +368,7 @@ fun HomeScreen(vm: Engine, requestPermissions: () -> Unit, enableBluetooth: () -
                 devicesRow()
                 freeRideTile(Modifier.weight(1f))
                 workoutTile(Modifier.weight(1f))
+                planRow()
                 historyRow()
                 settingsRow()
             }

@@ -284,6 +284,7 @@ fun SummaryScreen(vm: Engine) {
 
     val p = pending
     val w = win()
+    val planNote by vm.planNote.collectAsState()
     Column(Modifier.fillMaxSize()) {
         TopBar("Einheit beendet", conn)
         if (p != null) {
@@ -294,6 +295,9 @@ fun SummaryScreen(vm: Engine) {
                     fontSize = 16.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                planNote?.let {
+                    Text(it, fontSize = 14.sp, lineHeight = 20.sp, color = MaterialTheme.colorScheme.outline)
+                }
             }
             RidePanes(
                 w = w,

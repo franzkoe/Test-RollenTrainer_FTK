@@ -66,6 +66,19 @@ object AppIcons {
     )
     val Timer = lineIcon("timer", "M10 2h4 M12 14l3-3 M4 14a8 8 0 1 0 16 0a8 8 0 1 0-16 0")
     val Chart = lineIcon("chart", "M3 3v18h18 M7 15l4-5 4 3 5-7")
+    val Calendar = lineIcon(
+        "calendar",
+        "M8 2v4 M16 2v4 M3 10h18 M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z",
+    )
+    val Check = lineIcon("check", "M20 6L9 17l-5-5")
+    val Message = lineIcon(
+        "message",
+        "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z",
+    )
+    val User = lineIcon(
+        "user",
+        "M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2 M8 7a4 4 0 1 0 8 0a4 4 0 1 0-8 0",
+    )
     val Heart = lineIcon(
         "heart",
         "M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2" +
