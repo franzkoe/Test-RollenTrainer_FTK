@@ -50,7 +50,16 @@ data class Profile(
     val ftp: Int = 0,
     val byHr: Boolean = true,
     val zoneMax: List<Int> = hrZonesFromMax(185),
+    /** Körpergewicht in kg, 0 = nicht angegeben. */
+    val weight: Int = 0,
 ) {
+    /** FTP pro kg Körpergewicht, null wenn FTP oder Gewicht fehlen. */
+    val wattsPerKg: Double? get() = if (ftp > 0 && weight > 0) ftp.toDouble() / weight else null
+
+    /** Watt pro kg als Text, z. B. „3,14 W/kg“. */
+    fun wattsPerKgText(): String? =
+        wattsPerKg?.let { String.format(java.util.Locale.GERMANY, "%.2f W/kg", it) }
+
     /** true: Steuerung über Watt (ERG). false: Training nach Puls mit eigener Stufenwahl. */
     val power: Boolean get() = !byHr && ftp > 0
 
@@ -80,6 +89,8 @@ data class Profile(
         const val FTP_MAX = 500
         const val HR_MIN = 60
         const val HR_MAX = 230
+        const val WEIGHT_MIN = 30
+        const val WEIGHT_MAX = 200
     }
 }
 
@@ -288,8 +299,45 @@ fun alternativeFor(s: Session): Session = when {
 // ---------------------------------------------------------------- Pläne
 
 /**
+ * Schwerpunkt eines Plans: welche harten Einheiten vorkommen. [maxHard] begrenzt bei den reinen
+ * Schwerpunkten die harten Einheiten pro Woche, die übrigen bleiben lockere Grundlage.
+ */
+enum class Focus(val label: String, val text: String, val maxHard: Int) {
+    MIXED(
+        "Gemischt",
+        "Wie bisher: zwei harte Einheiten pro Woche, von Tempo und Sweet Spot über die " +
+            "Schwelle bis VO2max, dazwischen Grundlage.",
+        2,
+    ),
+    NO_VO2(
+        "Ohne VO2max",
+        "Zwei harte Einheiten pro Woche mit Tempo, Sweet Spot und Schwelle. Keine sehr " +
+            "harten VO2max-Intervalle.",
+        2,
+    ),
+    BASE(
+        "Nur Grundlage",
+        "Nur gleichmäßige Fahrten in Zone 2, ohne harte Abschnitte. Baut die Ausdauer auf " +
+            "und schont den Körper.",
+        0,
+    ),
+    THRESHOLD(
+        "Nur Schwelle",
+        "Sweet Spot, Schwelle und Über-Unter. Höchstens vier solche Einheiten pro Woche, " +
+            "weitere Einheiten bleiben lockere Grundlage.",
+        4,
+    ),
+    VO2(
+        "Nur VO2max",
+        "Nur VO2max-Intervalle, abwechselnd 4-Minuten-Intervalle und 30/15. Höchstens drei " +
+            "pro Woche, weitere Einheiten bleiben lockere Grundlage.",
+        3,
+    ),
+}
+
+/**
  * Eckdaten eines Plans: Niveau (0 bis 2), Einheiten pro Woche, Dauer je Einheit in Minuten,
- * Wochenzahl und Steigerung des Umfangs pro Woche in Prozent.
+ * Wochenzahl, Steigerung des Umfangs pro Woche in Prozent und Schwerpunkt.
  */
 data class PlanSpec(
     val name: String,
@@ -299,7 +347,15 @@ data class PlanSpec(
     val weeks: Int = 8,
     val stepPct: Int = 5,
     val text: String = "",
+    val focus: Focus = Focus.MIXED,
 ) {
+    /** Harte Einheiten in einer Belastungswoche. */
+    val hardPerWeek: Int
+        get() = when (focus) {
+            Focus.MIXED, Focus.NO_VO2 -> 2
+            else -> minOf(perWeek, focus.maxHard)
+        }
+
     fun summary(): String =
         "$perWeek × pro Woche · $minutes min · $weeks Wochen"
 
@@ -335,7 +391,60 @@ fun minutesInWeek(spec: PlanSpec, week: Int): Int {
 }
 
 /** Die beiden harten Einheiten einer Woche je Niveau und Abschnitt des Plans. */
-private fun hardPair(level: Int, part: Int, week: Int): List<Pair<Kind, Int>> {
+private fun hardPair(level: Int, part: Int, week: Int, focus: Focus): List<Pair<Kind, Int>> {
+    val pair = mixedPair(level, part, week)
+    if (focus != Focus.NO_VO2) return pair
+    // Ohne VO2max: an deren Stelle Schwelle bzw. Über-Unter
+    return pair.mapIndexed { i, p ->
+        if (p.first == Kind.VO2) (if (i == 0) Kind.THRESHOLD to 0 else Kind.THRESHOLD to 1) else p
+    }
+}
+
+/**
+ * Harte Einheiten bei einem reinen Schwerpunkt: [count] Einheiten, je Abschnitt des Plans
+ * etwas härter, innerhalb der Woche abwechselnd.
+ */
+private fun focusHard(focus: Focus, level: Int, part: Int, count: Int): List<Pair<Kind, Int>> {
+    val cycle: List<Pair<Kind, Int>> = when (focus) {
+        Focus.THRESHOLD -> when (part) {
+            // Grundlage: viel Sweet Spot, Aufbau: Schwelle, Spitze: Über-Unter
+            0 -> listOf(Kind.SWEETSPOT to 0, if (level == 0) Kind.SWEETSPOT to 0 else Kind.THRESHOLD to 0)
+            1 -> listOf(Kind.THRESHOLD to 0, Kind.SWEETSPOT to 0)
+            else -> listOf(if (level == 0) Kind.THRESHOLD to 0 else Kind.THRESHOLD to 1, Kind.SWEETSPOT to 0, Kind.THRESHOLD to 0)
+        }
+
+        // VO2max: lange und kurze Intervalle abwechselnd
+        else -> listOf(Kind.VO2 to 0, Kind.VO2 to 1)
+    }
+    return List(count) { cycle[it % cycle.size] }
+}
+
+/**
+ * Harte und lockere Einheiten möglichst abwechselnd, die lange Fahrt zuletzt. Gibt es weniger
+ * lockere als harte Einheiten, werden die harten in gleich große Gruppen geteilt.
+ */
+private fun interleave(hard: List<Session>, easy: List<Session>, long: Session?): List<Session> {
+    val out = ArrayList<Session>()
+    if (easy.size >= hard.size) {
+        hard.forEachIndexed { i, s ->
+            out.add(s)
+            out.add(easy[i])
+        }
+        out.addAll(easy.drop(hard.size))
+    } else {
+        val groups = easy.size + 1
+        var h = 0
+        for (g in 0 until groups) {
+            val size = hard.size / groups + if (g < hard.size % groups) 1 else 0
+            repeat(size) { out.add(hard[h++]) }
+            if (g < easy.size) out.add(easy[g])
+        }
+    }
+    if (long != null) out.add(long)
+    return out
+}
+
+private fun mixedPair(level: Int, part: Int, week: Int): List<Pair<Kind, Int>> {
     val alt = week % 2
     return when (level.coerceIn(0, 2)) {
         0 -> when (part) {
@@ -359,8 +468,9 @@ private fun hardPair(level: Int, part: Int, week: Int): List<Pair<Kind, Int>> {
 }
 
 /**
- * Erzeugt den Plan: Die Wochen gliedern sich in Grundlage, Aufbau und Spitze. Pro Woche höchstens
- * zwei harte Einheiten, der Rest locker. Jede vierte Woche entlastet.
+ * Erzeugt den Plan: Die Wochen gliedern sich in Grundlage, Aufbau und Spitze. Gemischt pro Woche
+ * zwei harte Einheiten, der Rest locker; bei reinen Schwerpunkten siehe [Focus]. Jede vierte Woche
+ * entlastet.
  */
 fun generatePlan(input: PlanSpec): Plan {
     val spec = input.copy(
@@ -376,7 +486,20 @@ fun generatePlan(input: PlanSpec): Plan {
         val long = round5(m * 1.25).coerceAtMost(150)
         val easy = round5(m * 0.5).coerceIn(20, 45)
         val list = ArrayList<Session>()
-        if (isRecoveryWeek(w)) {
+        val part = (w * 3 / spec.weeks).coerceIn(0, 2)
+        if (spec.focus == Focus.BASE) {
+            // Nur Grundlage: alles in Zone 2, ab vier Einheiten eine lange Fahrt
+            val n = spec.perWeek
+            for (i in 0 until n) {
+                list.add(
+                    if (n >= 4 && i == n - 1 && !isRecoveryWeek(w)) {
+                        buildSession(Kind.ENDURANCE, long, spec.level, variant = 1)
+                    } else {
+                        buildSession(Kind.ENDURANCE, m, spec.level)
+                    }
+                )
+            }
+        } else if (isRecoveryWeek(w)) {
             // Entlastung: alles locker, eine Einheit ganz leicht
             for (i in 0 until spec.perWeek) {
                 list.add(
@@ -384,9 +507,19 @@ fun generatePlan(input: PlanSpec): Plan {
                     else buildSession(Kind.ENDURANCE, m, spec.level)
                 )
             }
+        } else if (spec.focus == Focus.THRESHOLD || spec.focus == Focus.VO2) {
+            val hardCount = spec.hardPerWeek
+            val hard = focusHard(spec.focus, spec.level, part, hardCount)
+                .map { buildSession(it.first, m, spec.level, it.second) }
+            val easyCount = spec.perWeek - hardCount
+            // Bleibt nach dem Wechsel hart/locker eine lockere Einheit übrig, wird sie zur langen Fahrt
+            val longRide = if (easyCount > hardCount) buildSession(Kind.ENDURANCE, long, spec.level, variant = 1) else null
+            val easyList = List(easyCount - (if (longRide != null) 1 else 0)) {
+                buildSession(Kind.ENDURANCE, m, spec.level)
+            }
+            list.addAll(interleave(hard, easyList, longRide))
         } else {
-            val part = (w * 3 / spec.weeks).coerceIn(0, 2)
-            val (a, b) = hardPair(spec.level, part, w)
+            val (a, b) = hardPair(spec.level, part, w, spec.focus)
             val hardA = buildSession(a.first, m, spec.level, a.second)
             val hardB = buildSession(b.first, m, spec.level, b.second)
             val base = buildSession(Kind.ENDURANCE, m, spec.level)
