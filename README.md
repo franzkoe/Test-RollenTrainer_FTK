@@ -4,7 +4,8 @@ Kotlin · Jetpack Compose (Material 3) · Bluetooth Low Energy (Fitness Machine 
 
 Die App scannt und verbindet den Trainer selbst (kein Koppeln in den Android-Einstellungen),
 steuert den Widerstand im ERG-Modus und bietet **Geräte**, **Freie Fahrt** (21 Stufen),
-**Trainingsauswahl** (Intervall-Vorlagen) und **Verlauf** (aufgezeichnete Fahrten).
+**Trainingsauswahl** (Intervall-Vorlagen), **Mein Trainingsplan** (Pläne nach FTP oder Puls)
+und **Verlauf** (aufgezeichnete Fahrten).
 
 ## Version 2.0
 
@@ -19,6 +20,35 @@ steuert den Widerstand im ERG-Modus und bietet **Geräte**, **Freie Fahrt** (21 
   zeigt eine Benachrichtigung den aktuellen Stand.
 - **Pulsmesser:** Brustgurte, Armbänder und Uhren mit Bluetooth-Herzfrequenz lassen sich
   zusätzlich zum Trainer verbinden.
+
+## Version 2.3 – Mein Trainingsplan
+
+- **Fertige Pläne:** Sechs Pläne vom Einstieg (2 × 30 min pro Woche) bis „Leistung Plus“
+  (5 × 75 min), je nach Häufigkeit und Niveau.
+- **Eigener Plan:** Niveau, Einheiten pro Woche, Dauer je Einheit, Länge des Plans und die
+  Steigerung pro Woche wählen. Die App baut daraus den Plan und zeigt ihn vorab.
+- **Nach FTP oder nach Puls:** Mit FTP stellt die App den Widerstand in jedem Abschnitt selbst
+  ein. Ohne FTP wird nach Pulszonen trainiert: Die App zeigt die Zielzone, den Widerstand
+  stellst du über die Stufen. Die Zonen lassen sich aus dem Maximalpuls berechnen oder frei
+  einstellen.
+- **Dashboard:** Stand und Fortschritt des laufenden Plans, die nächste Einheit und immer eine
+  leichtere Alternative für Tage, an denen du nicht erholt bist.
+- **KI-Auswertung (Unterpunkt im Plan):** Der Trainingsstand lässt sich an einen frei
+  wählbaren KI-Dienst schicken, der ihn auswertet oder eine Einheit vorschlägt. Die
+  vorgeschlagene Einheit kann direkt gefahren werden. Ohne eigenen Zugang lässt sich die Anfrage
+  als Text in jede andere App geben.
+
+**Wie die Pläne gebaut sind:** Leistungszonen in Prozent der FTP (bis 55, 56–75, 76–90, 91–105,
+ab 106), Pulszonen bei 60/70/80/90 % des Maximalpulses. Pro Woche höchstens zwei bis drei harte
+Einheiten, der Rest locker. Der Umfang steigt um den gewählten Prozentsatz, jede vierte Woche
+ist eine Entlastungswoche mit rund 40 % weniger Umfang. Die Wochen gliedern sich in Grundlage
+(Tempo, Sweet Spot), Aufbau (Schwelle) und Spitze (VO2max). Die Pläne ersetzen keine
+sportärztliche Beratung.
+
+**Zur KI-Auswertung:** Die App spricht das verbreitete Format „Chat Completions“. Adresse,
+Schlüssel und Modell trägst du selbst ein. Daten gehen nur dann an den Dienst, wenn du eine
+Anfrage abschickst: Profil, Planstand und die letzten 12 Fahrten. Der Schlüssel liegt nur im
+privaten Speicher der App. Dafür hat die App jetzt die Berechtigung „Internet“.
 
 ## Version 2.2 – Tablet, Querformat, einstellbare Stufen
 
@@ -164,8 +194,13 @@ app/src/main/java/de/rollentrainer/app/
 │   ├── Models.kt          Gerät, Training, Phasen, Stufentabelle, Fahrt, Messpunkt
 │   ├── Store.kt           Einstellungen, Geräte, Trainings (DataStore)
 │   ├── RideStore.kt       Gespeicherte Fahrten (Dateien)
-│   └── Export.kt          FIT- und TCX-Export
-└── ui/                    Compose-Oberfläche (Hauptmenü, Geräte, Freie Fahrt, Trainings, Verlauf)
+│   ├── Export.kt          FIT- und TCX-Export
+│   ├── Plan.kt            Trainingsplan: Profil, Einheiten, fertige Pläne, Generator, Fortschritt
+│   ├── PlanJson.kt        Speicherformat für Profil und Plan
+│   └── Ai.kt              Schnittstelle zum KI-Dienst, Anfragetext, Lesen der Antwort
+└── ui/                    Compose-Oberfläche (Hauptmenü, Geräte, Freie Fahrt, Trainings,
+                           Trainingsplan, KI-Auswertung, Verlauf)
+app/src/test/              Prüfungen der Plan-Logik (laufen bei jedem Build)
 ```
 
 ## Lizenz

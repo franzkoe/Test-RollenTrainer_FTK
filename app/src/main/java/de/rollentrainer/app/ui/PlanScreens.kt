@@ -407,19 +407,19 @@ fun PlanNewScreen(vm: Engine) {
         }
         PlanCard("Wie oft und wie lange?") {
             Stepper(
-                label = "Einheiten pro Woche",
+                label = "Pro Woche",
                 valueText = spec.perWeek.toString(),
                 onMinus = { spec = spec.copy(perWeek = (spec.perWeek - 1).coerceAtLeast(PlanSpec.MIN_PER_WEEK)) },
                 onPlus = { spec = spec.copy(perWeek = (spec.perWeek + 1).coerceAtMost(PlanSpec.MAX_PER_WEEK)) },
             )
             Stepper(
-                label = "Dauer je Einheit",
+                label = "Je Einheit",
                 valueText = "${spec.minutes} min",
                 onMinus = { spec = spec.copy(minutes = (spec.minutes - 5).coerceAtLeast(PlanSpec.MIN_MINUTES)) },
                 onPlus = { spec = spec.copy(minutes = (spec.minutes + 5).coerceAtMost(PlanSpec.MAX_MINUTES)) },
             )
             Stepper(
-                label = "Dauer des Plans",
+                label = "Länge",
                 valueText = "${spec.weeks} Wochen",
                 onMinus = { spec = spec.copy(weeks = (spec.weeks - 1).coerceAtLeast(PlanSpec.MIN_WEEKS)) },
                 onPlus = { spec = spec.copy(weeks = (spec.weeks + 1).coerceAtMost(PlanSpec.MAX_WEEKS)) },
@@ -525,9 +525,9 @@ fun PlanProfileScreen(vm: Engine) {
                 }
             )
         }
-        PlanCard("FTP") {
+        PlanCard("Schwellenleistung (FTP)") {
             Stepper(
-                label = "Schwellenleistung",
+                label = "FTP",
                 valueText = if (profile.ftp == 0) "keine" else "${profile.ftp} W",
                 onMinus = {
                     val next = profile.ftp - 5
@@ -553,8 +553,10 @@ fun PlanProfileScreen(vm: Engine) {
                 )
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     for (z in 1..5) {
-                        val from = round5(profile.ftp * ZONE_PCT_FROM[z - 1] / 100.0)
-                        val to = if (z < 5) round5(profile.ftp * (ZONE_PCT_FROM[z] - 1) / 100.0) else null
+                        // Obergrenze gerundet, die nächste Zone beginnt ein Watt darüber
+                        fun top(zone: Int) = (profile.ftp * (ZONE_PCT_FROM[zone] - 1) / 100.0).roundToInt()
+                        val from = if (z == 1) 0 else top(z - 1) + 1
+                        val to = if (z < 5) top(z) else null
                         ZoneRow(
                             z,
                             when {
@@ -601,7 +603,7 @@ fun PlanProfileScreen(vm: Engine) {
                     vm.setProfile(profile.copy(zoneMax = list))
                 }
                 Stepper(
-                    label = "Zone ${i + 1} · ${zoneName(i + 1)} bis",
+                    label = "Zone ${i + 1} bis",
                     valueText = profile.zoneMax[i].toString(),
                     onMinus = { set(profile.zoneMax[i] - 1) },
                     onPlus = { set(profile.zoneMax[i] + 1) },
@@ -692,6 +694,9 @@ private fun PlanDashboardScreen(vm: Engine, st: PlanState) {
                 color = MaterialTheme.colorScheme.outline,
             )
         }
+    }
+
+    val details: @Composable () -> Unit = {
         MetricGrid(
             listOf(
                 Metric("Gefahren", st.ridden.toString(), "von ${plan.total}"),
@@ -748,7 +753,7 @@ private fun PlanDashboardScreen(vm: Engine, st: PlanState) {
                             "den Plan."
                     }
                 )
-                SessionLine(alt, "${alt.minutes} min")
+                SessionLine(alt, alt.kind.label)
                 WorkoutChart(alt.phases(profile), Modifier.fillMaxWidth().height(32.dp))
                 FilledTonalButton(
                     onClick = { vm.startNext(alt = true) },
@@ -756,6 +761,9 @@ private fun PlanDashboardScreen(vm: Engine, st: PlanState) {
                 ) { Text("Alternative starten", fontSize = 16.sp, fontWeight = FontWeight.Medium) }
             }
         }
+    }
+
+    val links: @Composable () -> Unit = {
         LinkRow(
             AppIcons.Message, "KI-Auswertung",
             "Stand auswerten oder eine Einheit vorschlagen lassen",
@@ -780,7 +788,12 @@ private fun PlanDashboardScreen(vm: Engine, st: PlanState) {
 
     Column(Modifier.fillMaxSize()) {
         TopBar("Mein Trainingsplan", conn, onBack = { vm.back() })
-        Panes(w, Modifier.weight(1f), status, action)
+        // Hochkant: Stand, dann gleich die nächste Einheit. Quer: Stand links, Einheit rechts.
+        if (w.landscape) {
+            Panes(w, Modifier.weight(1f), { status(); details() }, { action(); links() })
+        } else {
+            Panes(w, Modifier.weight(1f), { status(); action() }, { details(); links() })
+        }
     }
 
     if (askEnd) {

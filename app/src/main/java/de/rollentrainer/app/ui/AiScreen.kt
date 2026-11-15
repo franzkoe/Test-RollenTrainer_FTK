@@ -114,6 +114,9 @@ fun PlanAiScreen(vm: Engine) {
                     "12 Fahrten an den eingestellten Dienst. Sonst verlässt nichts das Gerät."
             )
         }
+    }
+
+    val share: @Composable () -> Unit = {
         AiCard("Ohne eigenen Zugang") {
             AiHint(
                 "Gib die Anfrage als Text an eine andere App weiter, zum Beispiel an die App " +
@@ -204,6 +207,9 @@ fun PlanAiScreen(vm: Engine) {
         } else if (ai.text.isNotEmpty() && ai.text.contains("\"segments\"")) {
             AiHint("Die vorgeschlagene Einheit ließ sich nicht lesen. Frag am besten noch einmal.")
         }
+    }
+
+    val service: @Composable () -> Unit = {
         ServiceCard(config, editing || !config.ready, onEdit = { editing = true }) {
             vm.saveAiConfig(it)
             editing = false
@@ -220,11 +226,17 @@ fun PlanAiScreen(vm: Engine) {
                 Column(
                     Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) { ask() }
+                ) {
+                    ask()
+                    share()
+                }
                 Column(
                     Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) { answer() }
+                ) {
+                    answer()
+                    service()
+                }
             }
         } else {
             Column(
@@ -235,14 +247,13 @@ fun PlanAiScreen(vm: Engine) {
                     .padding(top = 8.dp, bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                // Solange kein Dienst eingerichtet ist, steht die Einrichtung oben
-                if (!config.ready) {
-                    answer()
-                    ask()
-                } else {
-                    ask()
-                    answer()
-                }
+                // Solange kein Dienst eingerichtet ist, steht die Einrichtung oben.
+                // Die Antwort erscheint direkt unter den Anfragen.
+                if (!config.ready) service()
+                ask()
+                answer()
+                share()
+                if (config.ready) service()
             }
         }
     }
