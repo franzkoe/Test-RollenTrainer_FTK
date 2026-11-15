@@ -136,12 +136,14 @@ fun DashboardScreen(vm: Engine, onImportRecovery: () -> Unit) {
                 Text("heute", fontSize = 13.sp, color = MaterialTheme.colorScheme.outline)
             }
             val last = series.last()
-            Text(
-                "Fitness ${fmt(last.fitness)} · Ermüdung ${fmt(last.fatigue)} · " +
-                    "Form ${signed(last.form)} (${formText(last.form)})",
-                fontSize = 15.sp,
-                style = Tnum,
-            )
+            if (series.any { it.fitness > 0.0 }) {
+                Text(
+                    "Fitness ${fmt(last.fitness)} · Ermüdung ${fmt(last.fatigue)} · " +
+                        "Form ${signed(last.form)} (${formText(last.form)})",
+                    fontSize = 15.sp,
+                    style = Tnum,
+                )
+            }
             Hint(
                 "Fitness ist deine durchschnittliche Belastung der letzten sechs Wochen " +
                     "(kräftige Linie), Ermüdung die der letzten Woche (dünne Linie). Form ist " +

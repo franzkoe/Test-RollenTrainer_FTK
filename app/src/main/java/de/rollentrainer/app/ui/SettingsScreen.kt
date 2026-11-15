@@ -100,7 +100,7 @@ fun SettingsScreen(vm: Engine, openBatterySettings: () -> Unit) {
                 "${config.levels} Stufen bis ${config.watts(config.levels)} W",
             ) { vm.open(Screen.SETTINGS_LEVELS) }
             Text("Freie Fahrten für die Analyse verwenden", fontSize = 16.sp)
-            Choice(listOf("Jedes Mal fragen", "Immer", "Nie"), analysisMode) { vm.setAnalysisMode(it) }
+            Choice(listOf("Fragen", "Immer", "Nie"), analysisMode) { vm.setAnalysisMode(it) }
             Hint(
                 "Gilt beim Speichern einer Freien Fahrt. Fahrten aus Trainings und " +
                     "Trainingsplan zählen immer."
