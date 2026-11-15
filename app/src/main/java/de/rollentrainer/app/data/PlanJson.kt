@@ -29,6 +29,7 @@ fun profileToJson(p: Profile): String = JSONObject()
     .put("ftp", p.ftp)
     .put("byHr", p.byHr)
     .put("zones", JSONArray(p.zoneMax))
+    .put("weight", p.weight)
     .toString()
 
 fun parseProfile(json: String?): Profile {
@@ -45,6 +46,7 @@ fun parseProfile(json: String?): Profile {
             ftp = o.optInt("ftp", 0).coerceIn(0, Profile.FTP_MAX),
             byHr = o.optBoolean("byHr", true),
             zoneMax = zones,
+            weight = o.optInt("weight", 0).let { if (it < Profile.WEIGHT_MIN || it > Profile.WEIGHT_MAX) 0 else it },
         )
     } catch (e: Exception) {
         Profile()
@@ -90,6 +92,7 @@ private fun specToJson(s: PlanSpec): JSONObject = JSONObject()
     .put("weeks", s.weeks)
     .put("stepPct", s.stepPct)
     .put("text", s.text)
+    .put("focus", s.focus.name)
 
 private fun parseSpec(o: JSONObject): PlanSpec = PlanSpec(
     name = o.optString("name", "Trainingsplan"),
@@ -99,6 +102,11 @@ private fun parseSpec(o: JSONObject): PlanSpec = PlanSpec(
     weeks = o.optInt("weeks", 8),
     stepPct = o.optInt("stepPct", 5),
     text = o.optString("text", ""),
+    focus = try {
+        Focus.valueOf(o.optString("focus", Focus.MIXED.name))
+    } catch (e: Exception) {
+        Focus.MIXED
+    },
 )
 
 fun planStateToJson(st: PlanState): String {

@@ -165,6 +165,8 @@ fun aiContext(profile: Profile, state: PlanState?, rides: List<RideSummary>, now
     val sb = StringBuilder()
     sb.append("Heute ist der ").append(date(nowMs)).append(".\n\nPROFIL\n")
     if (profile.ftp > 0) sb.append("FTP: ${profile.ftp} W\n") else sb.append("FTP: nicht bekannt\n")
+    if (profile.weight > 0) sb.append("Gewicht: ${profile.weight} kg\n")
+    profile.wattsPerKgText()?.let { sb.append("FTP pro kg: $it\n") }
     sb.append(
         if (profile.power) "Steuerung: Watt werden aus der FTP vorgegeben\n"
         else "Steuerung: Training nach Pulszonen, Widerstand wird selbst gewählt\n"
@@ -178,6 +180,7 @@ fun aiContext(profile: Profile, state: PlanState?, rides: List<RideSummary>, now
     } else {
         val spec = state.plan.spec
         sb.append("${spec.name}: ${LEVEL_NAMES[spec.level.coerceIn(0, 2)]}, ${spec.summary()}, ")
+        sb.append("Schwerpunkt ${spec.focus.label}, ")
         sb.append("Steigerung ${spec.stepPct} % pro Woche, gestartet am ${date(state.startMs)}\n")
         sb.append(
             "Stand: ${state.done.size} von ${state.plan.total} Einheiten abgearbeitet, davon " +

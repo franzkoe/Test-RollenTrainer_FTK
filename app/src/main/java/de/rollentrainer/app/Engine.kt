@@ -40,6 +40,7 @@ import de.rollentrainer.app.data.AiConfig
 import de.rollentrainer.app.data.AiException
 import de.rollentrainer.app.data.Done
 import de.rollentrainer.app.data.ExportFormat
+import de.rollentrainer.app.data.Focus
 import de.rollentrainer.app.data.PlanSpec
 import de.rollentrainer.app.data.PlanState
 import de.rollentrainer.app.data.Profile
@@ -947,6 +948,16 @@ class Engine private constructor(private val app: Context) {
 
     fun endPlan() {
         scope.launch { store.setPlan(null) }
+    }
+
+    /**
+     * Ändert den Schwerpunkt des laufenden Plans. Der Plan wird mit denselben Eckdaten neu
+     * erzeugt; was schon erledigt ist, bleibt eingetragen.
+     */
+    fun changeFocus(focus: Focus) {
+        val st = planState.value ?: return
+        if (st.plan.spec.focus == focus) return
+        scope.launch { store.setPlan(st.copy(plan = generatePlan(st.plan.spec.copy(focus = focus)))) }
     }
 
     private fun addDone(d: Done) {

@@ -21,6 +21,17 @@ und **Verlauf** (aufgezeichnete Fahrten).
 - **Pulsmesser:** Brustgurte, Armbänder und Uhren mit Bluetooth-Herzfrequenz lassen sich
   zusätzlich zum Trainer verbinden.
 
+## Version 2.4 – Schwerpunkt und Watt pro kg
+
+- **Schwerpunkt für jeden Plan:** Beim Start eines fertigen oder eigenen Plans wählst du, welche
+  Einheiten vorkommen: **Gemischt** (wie bisher), **Ohne VO2max**, **Nur Grundlage** (Zone 2),
+  **Nur Schwelle** (Sweet Spot, Schwelle, Über-Unter) oder **Nur VO2max**. Im laufenden Plan
+  lässt sich der Schwerpunkt im Dashboard ändern, Erledigtes bleibt eingetragen.
+- Bei „Nur Schwelle“ gibt es höchstens vier, bei „Nur VO2max“ höchstens drei harte Einheiten pro
+  Woche. Weitere Einheiten bleiben lockere Grundlage, Entlastungswochen bleiben locker.
+- **Watt pro kg:** Im Profil lässt sich das Körpergewicht eintragen. Die App zeigt die FTP dann
+  auch in Watt pro kg.
+
 ## Version 2.3 – Mein Trainingsplan
 
 - **Fertige Pläne:** Sechs Pläne vom Einstieg (2 × 30 min pro Woche) bis „Leistung Plus“

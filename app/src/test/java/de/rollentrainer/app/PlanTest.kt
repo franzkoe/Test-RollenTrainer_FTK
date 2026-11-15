@@ -2,6 +2,7 @@ package de.rollentrainer.app
 
 import de.rollentrainer.app.data.AiConfig
 import de.rollentrainer.app.data.Done
+import de.rollentrainer.app.data.Focus
 import de.rollentrainer.app.data.Kind
 import de.rollentrainer.app.data.PRESET_PLANS
 import de.rollentrainer.app.data.PlanSpec
@@ -71,6 +72,39 @@ class PlanTest {
     }
 
     @Test
+    fun schwerpunkte() {
+        val hardKinds = setOf(Kind.TEMPO, Kind.SWEETSPOT, Kind.THRESHOLD, Kind.VO2)
+        for (focus in Focus.values()) for (level in 0..2) for (perWeek in 2..6) {
+            val spec = PlanSpec("x", level, perWeek, 60, 12, 5, focus = focus)
+            val plan = generatePlan(spec)
+            assertEquals(12 * perWeek, plan.total)
+            plan.weeks.forEachIndexed { w, list ->
+                val kinds = list.map { it.kind }.toSet()
+                val hard = list.count { it.hard }
+                when (focus) {
+                    Focus.BASE -> assertTrue("$spec W$w", list.all { it.kind == Kind.ENDURANCE && !it.hard })
+                    Focus.NO_VO2 -> assertFalse(Kind.VO2 in kinds)
+                    Focus.THRESHOLD -> {
+                        assertTrue((kinds intersect hardKinds).all { it == Kind.SWEETSPOT || it == Kind.THRESHOLD })
+                        if (!isRecoveryWeek(w)) assertEquals("$spec W$w", minOf(perWeek, 4), hard)
+                    }
+                    Focus.VO2 -> {
+                        assertTrue((kinds intersect hardKinds).all { it == Kind.VO2 })
+                        if (!isRecoveryWeek(w)) assertEquals("$spec W$w", minOf(perWeek, 3), hard)
+                    }
+                    Focus.MIXED -> {}
+                }
+                if (isRecoveryWeek(w)) assertEquals(0, hard)
+            }
+        }
+        // Gemischt bleibt wie bisher
+        assertEquals(generatePlan(PRESET_PLANS[2]), generatePlan(PRESET_PLANS[2].copy(focus = Focus.MIXED)))
+        // Schwerpunkt wird gespeichert
+        val st = PlanState(generatePlan(PRESET_PLANS[1].copy(focus = Focus.VO2)), 0L)
+        assertEquals(Focus.VO2, parsePlanState(planStateToJson(st))!!.plan.spec.focus)
+    }
+
+    @Test
     fun wattAusFtpUndZonenAusPuls() {
         val s = buildSession(Kind.SWEETSPOT, 45)
         val watts = s.phases(Profile(ftp = 200, byHr = false))
@@ -137,6 +171,13 @@ class PlanTest {
         val p = Profile(ftp = 245, byHr = false, zoneMax = listOf(110, 128, 146, 165))
         assertEquals(p, parseProfile(profileToJson(p)))
         assertEquals(Profile(), parseProfile(null))
+        // Watt pro kg
+        val heavy = Profile(ftp = 220, byHr = false, weight = 75)
+        assertEquals(heavy, parseProfile(profileToJson(heavy)))
+        assertEquals("2,93 W/kg", heavy.wattsPerKgText())
+        assertNull(Profile(ftp = 220).wattsPerKgText())
+        assertNull(Profile(weight = 75).wattsPerKgText())
+        assertTrue(aiContext(heavy, null, emptyList(), 0L).contains("FTP pro kg: 2,93 W/kg"))
         val c = AiConfig("https://api.example.com/v1", "geheim", "modell-1")
         assertEquals(c, parseAiConfig(aiConfigToJson(c)))
         assertEquals("https://api.example.com/v1/chat/completions", aiEndpoint(" https://api.example.com/v1/ "))

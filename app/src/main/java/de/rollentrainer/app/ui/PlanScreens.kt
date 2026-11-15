@@ -22,7 +22,12 @@ package de.rollentrainer.app.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.graphics.Color
+import de.rollentrainer.app.data.Focus
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -199,6 +204,83 @@ private fun Choice(options: List<String>, selected: Int, onSelect: (Int) -> Unit
     }
 }
 
+/** Auswahl des Schwerpunkts: eine Zeile je Möglichkeit, die gewählte mit Erklärung. */
+@Composable
+private fun FocusPicker(selected: Focus, onSelect: (Focus) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Focus.values().forEach { f ->
+            val on = f == selected
+            val shape = RoundedCornerShape(12.dp)
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(shape)
+                    .background(
+                        if (on) MaterialTheme.colorScheme.surfaceContainerHighest else Color.Transparent
+                    )
+                    .border(1.dp, hairline(), shape)
+                    .clickable { onSelect(f) }
+                    .heightIn(min = 48.dp)
+                    .padding(horizontal = 12.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        f.label,
+                        fontSize = 15.sp,
+                        fontWeight = if (on) FontWeight.Medium else FontWeight.Normal,
+                    )
+                    if (on) {
+                        Text(
+                            f.text,
+                            fontSize = 14.sp,
+                            lineHeight = 20.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                if (on) {
+                    Spacer(Modifier.width(8.dp))
+                    Icon(
+                        AppIcons.Check,
+                        contentDescription = "gewählt",
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** Dialog: Schwerpunkt für einen Plan wählen, mit Vorschau des Umfangs je Woche. */
+@Composable
+private fun FocusDialog(
+    spec: PlanSpec,
+    title: String,
+    confirm: String,
+    onConfirm: (Focus) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var focus by remember(spec) { mutableStateOf(spec.focus) }
+    val plan = remember(spec, focus) { generatePlan(spec.copy(focus = focus)) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column(
+                Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                FocusPicker(focus) { focus = it }
+                WeekBars(plan, Modifier.fillMaxWidth().height(48.dp))
+            }
+        },
+        confirmButton = { Button(onClick = { onConfirm(focus) }) { Text(confirm) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Abbrechen") } },
+    )
+}
+
 /** Zeile, die auf eine Unterseite führt. */
 @Composable
 private fun LinkRow(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit) {
@@ -234,7 +316,8 @@ private fun LinkRow(icon: ImageVector, title: String, subtitle: String, onClick:
 
 private fun profileLine(p: Profile): String =
     if (p.power) {
-        "FTP ${p.ftp} W · der Widerstand wird vorgegeben"
+        "FTP ${p.ftp} W" + (p.wattsPerKgText()?.let { " ($it)" } ?: "") +
+            " · der Widerstand wird vorgegeben"
     } else {
         "Training nach Puls · Zonen bis " + p.zoneMax.joinToString(" / ")
     }
@@ -327,7 +410,21 @@ private fun PlanChooserScreen(vm: Engine) {
     val conn by vm.connState.collectAsState()
     val profile by vm.profile.collectAsState()
     val w = win()
+    var picked by remember { mutableStateOf<PlanSpec?>(null) }
     BackHandler { vm.back() }
+
+    picked?.let { spec ->
+        FocusDialog(
+            spec = spec,
+            title = "„${spec.name}“ starten",
+            confirm = "Plan starten",
+            onConfirm = {
+                picked = null
+                vm.startPlan(spec.copy(focus = it))
+            },
+            onDismiss = { picked = null },
+        )
+    }
 
     Column(Modifier.fillMaxSize()) {
         TopBar("Mein Trainingsplan", conn, onBack = { vm.back() })
@@ -348,7 +445,7 @@ private fun PlanChooserScreen(vm: Engine) {
                 modifier = Modifier.padding(top = 12.dp),
             )
             CardGrid(PRESET_PLANS, w.columns) { spec, modifier ->
-                PresetCard(modifier, spec) { vm.startPlan(spec) }
+                PresetCard(modifier, spec) { picked = spec }
             }
         }
         BottomBar {
@@ -387,9 +484,9 @@ private fun PresetCard(modifier: Modifier, spec: PlanSpec, onStart: () -> Unit) 
 // ================================================================ Eigener Plan
 
 private val LEVEL_TEXTS = listOf(
-    "Du fährst noch nicht regelmäßig. Tempo und Sweet Spot, zum Schluss kurze Abschnitte an der Schwelle.",
-    "Du fährst regelmäßig. Sweet Spot und Schwelle, im letzten Drittel kommt VO2max dazu.",
-    "Du trainierst seit Längerem hart. Schwelle, Über-Unter und VO2max von Beginn an.",
+    "Du fährst noch nicht regelmäßig. Harte Abschnitte sind etwas leichter und steigern sich langsam.",
+    "Du fährst regelmäßig. Harte Abschnitte liegen im üblichen Bereich der jeweiligen Zone.",
+    "Du trainierst seit Längerem hart. Harte Abschnitte liegen am oberen Rand der jeweiligen Zone.",
 )
 
 @Composable
@@ -404,6 +501,9 @@ fun PlanNewScreen(vm: Engine) {
         PlanCard("Wie fortgeschritten bist du?") {
             Choice(LEVEL_NAMES, spec.level) { spec = spec.copy(level = it) }
             Hint(LEVEL_TEXTS[spec.level])
+        }
+        PlanCard("Welche Einheiten willst du fahren?") {
+            FocusPicker(spec.focus) { spec = spec.copy(focus = it) }
         }
         PlanCard("Wie oft und wie lange?") {
             Stepper(
@@ -538,6 +638,32 @@ fun PlanProfileScreen(vm: Engine) {
                     vm.setProfile(profile.copy(ftp = next.coerceAtMost(Profile.FTP_MAX)))
                 },
             )
+            Stepper(
+                label = "Gewicht",
+                valueText = if (profile.weight == 0) "keins" else "${profile.weight} kg",
+                onMinus = {
+                    val next = profile.weight - 1
+                    vm.setProfile(profile.copy(weight = if (next < Profile.WEIGHT_MIN) 0 else next))
+                },
+                onPlus = {
+                    val next = if (profile.weight == 0) 75 else profile.weight + 1
+                    vm.setProfile(profile.copy(weight = next.coerceAtMost(Profile.WEIGHT_MAX)))
+                },
+            )
+            profile.wattsPerKgText()?.let { perKg ->
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+                    Text(
+                        "FTP pro kg Körpergewicht",
+                        fontSize = 15.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(perKg, fontSize = 22.sp, fontWeight = FontWeight.Medium, style = Tnum)
+                }
+            }
+            if (profile.ftp > 0 && profile.weight == 0) {
+                Hint("Mit deinem Gewicht zeigt die App die FTP auch in Watt pro kg. So lässt sie sich besser vergleichen.")
+            }
             if (profile.ftp > 0) {
                 Slider(
                     value = profile.ftp.toFloat(),
@@ -643,9 +769,22 @@ private fun PlanDashboardScreen(vm: Engine, st: PlanState) {
     val profile by vm.profile.collectAsState()
     val w = win()
     var askEnd by remember { mutableStateOf(false) }
+    var askFocus by remember { mutableStateOf(false) }
     BackHandler { vm.back() }
 
     val plan = st.plan
+    if (askFocus) {
+        FocusDialog(
+            spec = plan.spec,
+            title = "Schwerpunkt ändern",
+            confirm = "Übernehmen",
+            onConfirm = {
+                askFocus = false
+                vm.changeFocus(it)
+            },
+            onDismiss = { askFocus = false },
+        )
+    }
     val next = st.next()
     val week = next?.first ?: (plan.weeks.size - 1)
 
@@ -653,7 +792,8 @@ private fun PlanDashboardScreen(vm: Engine, st: PlanState) {
         PlanCard {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
-                    plan.spec.name + " · " + LEVEL_NAMES[plan.spec.level.coerceIn(0, 2)],
+                    plan.spec.name + " · " + LEVEL_NAMES[plan.spec.level.coerceIn(0, 2)] +
+                        " · " + plan.spec.focus.label,
                     fontSize = 14.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -769,6 +909,12 @@ private fun PlanDashboardScreen(vm: Engine, st: PlanState) {
             "Stand auswerten oder eine Einheit vorschlagen lassen",
         ) { vm.open(Screen.PLAN_AI) }
         LinkRow(AppIcons.User, "Dein Profil", profileLine(profile)) { vm.open(Screen.PLAN_PROFILE) }
+        if (next != null) {
+            LinkRow(
+                AppIcons.Sliders, "Schwerpunkt: " + plan.spec.focus.label,
+                "Ändern wirkt auf alle noch offenen Einheiten",
+            ) { askFocus = true }
+        }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             if (st.done.isNotEmpty()) {
                 TextButton(onClick = { vm.undoLastDone() }) {
