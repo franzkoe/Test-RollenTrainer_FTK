@@ -182,18 +182,18 @@ private fun Choice(options: List<String>, selected: Int, onSelect: (Int) -> Unit
                 Button(
                     onClick = { onSelect(i) },
                     modifier = modifier,
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 2.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.primaryContainer,
                         contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                     ),
-                ) { Text(label, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                ) { Text(label, fontSize = 13.sp, maxLines = 1, softWrap = false) }
             } else {
                 OutlinedButton(
                     onClick = { onSelect(i) },
                     modifier = modifier,
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp),
-                ) { Text(label, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 2.dp),
+                ) { Text(label, fontSize = 13.sp, maxLines = 1, softWrap = false) }
             }
         }
     }
