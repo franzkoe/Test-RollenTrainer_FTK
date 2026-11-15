@@ -1,4 +1,5 @@
-# Rollentrainer – Android-App für den Van Rysel D100 (FTMS)
+# Rollentrainer – Android-App
+ (FTMS)
 
 Kotlin · Jetpack Compose (Material 3) · Bluetooth Low Energy (Fitness Machine Service)
 
